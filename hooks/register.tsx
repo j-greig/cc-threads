@@ -120,6 +120,13 @@ export const register: Register = on => {
         await update($, items, all => all.map(x => x.id === id && x.thread !== to ? { ...x, thread: to } : x))
       }
       delete m._move
+      // "_rename": {"<old>": "<new>"} renames a drawer and its entries.
+      const rn = (m._rename || {}) as Record<string, string>
+      for (const [from, to] of Object.entries(rn)) if ((await read($, threads)).some(t => t.name === from)) {
+        await update($, threads, l => l.map(t => t.name === from ? { ...t, name: to, words: [to] } : t))
+        await update($, items, all => all.map(x => x.thread === from ? { ...x, thread: to } : x))
+      }
+      delete m._rename
       for (const [id, ns] of Object.entries(m as Record<string, string[]>)) for (const n of ns) await update($, items, all => addNote(all, id, n))
     })
     if (cfg.suggest_tidy) $.clock.every(60000, async () => {
