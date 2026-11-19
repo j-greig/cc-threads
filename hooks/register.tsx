@@ -141,6 +141,12 @@ export const register: Register = on => {
       lastQuiet = ''
       return { text: 'Tidied ' + q.length + ' quiet drawer(s): ' + q.join(', ') }
     }
+    if (verb === 'log' && name && ws) {
+      if (!(await read($, threads)).some(t => t.name === name)) await update($, threads, list => [...list, { name, words: [name], isOpen: true }])
+      const now = Date.now()
+      await update($, items, xs => [...xs, { id: 'log-' + now, thread: name, title: ws, status: 'done' as const, started: now, ended: now, report: 'done in chat', seen: false }].slice(-cfg.keep_items))
+      return { text: 'Logged in ' + name + ': ' + ws }
+    }
     if (verb === 'config') return { text: 'Config file: ' + $.plugin.root + '/threads.toml\n' + Object.entries(cfg).map(([k, v]) => k + ' = ' + v).join('\n') }
     if (verb === 'rename' && name && ws) {
       await update($, threads, list => list.some(t => t.name === name)
@@ -153,7 +159,7 @@ export const register: Register = on => {
       await update($, threads, list => list.filter(t => t.name !== name))
       return { text: 'Dropped thread ' + name + '.' }
     }
-    if (verb && !['open', 'add', 'drop', 'remove', 'rename', 'help', 'tidy', 'config'].includes(verb)) {
+    if (verb && !['open', 'add', 'drop', 'remove', 'rename', 'help', 'tidy', 'config', 'log'].includes(verb)) {
       // /threads <name> <task...>: everything after the name is the task; start a background agent filed there.
       const task = e.args.trim().slice(verb.length).trim()
       if (!task) return { text: 'Give a task after the name: /threads ' + verb + ' what to do' }
@@ -206,6 +212,7 @@ export const register: Register = on => {
     const list = await read($, threads)
     const parts: string[] = []
     if (cfg.auto_organise) parts.push('Threads mod: when you start a background agent, begin its description with a [drawer] tag. Drawers now: ' + list.map(t => t.name).join(', ') + '. Reuse the drawer the work belongs to; if none fits, invent a short lowercase-hyphen name. Keep related tasks in one drawer.')
+    if (cfg.auto_organise) parts.push('Threads mod: when you finish work yourself (no agent) that clearly belongs to an existing drawer, and filing it would make the drawer history clearer, end your reply with one line: "file in <drawer>? /threads log <drawer> <short title>". Skip it for small talk or when no drawer fits.')
     const q = cfg.suggest_tidy ? quietOnes(list, await read($, items)) : []
     if (q.length) parts.push('Threads mod: these drawers have been quiet for ' + cfg.idle_minutes + '+ minutes: ' + q.join(', ') + '. At the end of your next reply, suggest once in one line that the person run /threads tidy.')
     if (!parts.length) return r

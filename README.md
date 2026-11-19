@@ -58,6 +58,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 /threads add <name> [keywords] add a drawer; agents whose task mentions a keyword land in it
 /threads rename <old> <new>    rename a drawer, entries kept
 /threads drop <name>           remove a drawer
+/threads log <name> <title>    file work done in chat as a finished entry
 /threads tidy                  remove drawers quiet for idle_minutes
 /threads config                show the settings file and values
 /threads                       open the pane
@@ -83,6 +84,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 ## Claude keeps it tidy ✧
 
 - **Auto-organise (on by default).** Claude sees your drawers and tags each agent it starts with one, reusing a drawer when the work fits and inventing a short name when nothing does.
+- **Offers to file chat work.** When I do a job myself that belongs in a drawer, I end with one line offering `/threads log <drawer> <title>`.
 - **Tidy suggestions.** A drawer with no running agent and no news for 15 minutes counts as quiet. You get a toast, and Claude suggests `/threads tidy` once in chat. `/threads tidy` removes the quiet drawers.
 
 ## Settings ⚙
