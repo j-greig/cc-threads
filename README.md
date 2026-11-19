@@ -34,7 +34,7 @@ Mouse clicks reach the pane only in fullscreen. From the keyboard: ctrl+x then t
 
 - Each agent is filed by words in its description or prompt. Put `[name]` in an agent's description to choose its fold; a new name makes a new fold.
 - `/thread music song,stems,mix` adds a fold with its match words. `/thread drop music` removes it. `/threads` reopens the pane.
-- Click a line to read the full report. `↳ reply` puts a reference to it in your prompt. `✕ remove` drops the entry.
+- Click a line to read the full report. `↳ reply` starts your prompt with a marker line, `⟜ threads › build › "title" (agent id)`, so the reply says which entry it answers and Claude can look up that agent. `✕ remove` drops the entry.
 - `✕` on an open fold's header removes the fold and its finished entries.
 - Running agents show a spinner and their age. New reports show a badge until you open the fold. The status line shows the totals.
 - Folds and reports are kept across sessions.
