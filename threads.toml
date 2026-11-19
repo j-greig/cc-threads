@@ -1,0 +1,7 @@
+# threads settings. Edit, then start a new session (or /reload-plugins).
+auto_organise = true    # Claude tags each agent with a drawer, reusing or inventing names
+idle_minutes = 15       # a drawer with no running agent and no news for this long counts as quiet
+suggest_tidy = true     # toast + a one-line suggestion in chat to run /threads tidy
+show_per_fold = 6       # entries listed per open drawer
+keep_items = 120        # entries kept in total
+open_on_start = true    # open the pane when a session starts

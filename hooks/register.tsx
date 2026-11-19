@@ -53,9 +53,33 @@ let pending = ''
 const addNote = (all: Item[], id: string, note: string) =>
   all.map(x => (x.id === id && !(x.notes || []).includes(note) ? { ...x, notes: [...(x.notes || []), note].slice(-8), seen: false } : x))
 
+type Cfg = { auto_organise: boolean; idle_minutes: number; suggest_tidy: boolean; show_per_fold: number; keep_items: number; open_on_start: boolean }
+const CFG0: Cfg = { auto_organise: true, idle_minutes: 15, suggest_tidy: true, show_per_fold: 6, keep_items: 120, open_on_start: true }
+let cfg: Cfg = { ...CFG0 }
+// threads.toml: flat "key = value" lines; # comments; unknown keys ignored.
+function parseToml(txt: string): Partial<Cfg> {
+  const out: Record<string, unknown> = {}
+  for (const raw of txt.split('\n')) {
+    const line = raw.replace(/#.*$/, '').trim()
+    const m = /^([a-z_]+)\s*=\s*(.+)$/.exec(line)
+    if (!m || !m[1] || !m[2]) continue
+    const v = m[2].trim()
+    out[m[1]] = v === 'true' ? true : v === 'false' ? false : /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v.replace(/^"|"$/g, '')
+  }
+  return out as Partial<Cfg>
+}
+let lastQuiet = ''
+const quietOnes = (list: Thread[], all: Item[]) => list.map(t => t.name).filter(name => {
+  const mine = all.filter(x => x.thread === name)
+  if (!mine.length || mine.some(x => x.status === 'running')) return false
+  const last = Math.max(...mine.map(x => x.ended || x.started))
+  return Date.now() - last > cfg.idle_minutes * 60000
+})
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     // $.state ends with the session; $.store keeps threads and reports across sessions.
+    try { cfg = { ...CFG0, ...parseToml(await $.fs.read($.plugin.root + '/threads.toml')) } } catch { cfg = { ...CFG0 } }
     const savedT = (await $.store.get('threads')) as Thread[] | undefined
     const savedI = (await $.store.get('items')) as Item[] | undefined
     await update($, threads, list => list.length ? list : savedT && savedT.length ? savedT : DEFAULTS)
@@ -91,7 +115,13 @@ export const register: Register = on => {
       try { m = JSON.parse(txt) } catch { return }
       for (const [id, ns] of Object.entries(m)) for (const n of ns) await update($, items, all => addNote(all, id, n))
     })
-    void $.ui.open({ id: PANE, title: 'Threads' })
+    if (cfg.suggest_tidy) $.clock.every(60000, async () => {
+      const q = quietOnes(await read($, threads), await read($, items))
+      const key = q.join(',')
+      if (q.length && key !== lastQuiet) $.ui.toast('threads: quiet ' + cfg.idle_minutes + 'm+: ' + key + '  ·  /threads tidy')
+      lastQuiet = key
+    })
+    if (cfg.open_on_start) void $.ui.open({ id: PANE, title: 'Threads' })
     return next(e)
   })
 
@@ -103,6 +133,15 @@ export const register: Register = on => {
       await $.ui.open({ id: PANE, title: 'Threads' })
       return { text: 'Added thread ' + name + ' (files agents matching: ' + words.join(', ') + '; or tag [' + name + '])' }
     }
+    if (verb === 'tidy') {
+      const q = quietOnes(await read($, threads), await read($, items))
+      if (!q.length) return { text: 'Nothing quiet for ' + cfg.idle_minutes + ' minutes.' }
+      await update($, threads, list => list.filter(t => !q.includes(t.name)))
+      await update($, items, xs => xs.filter(x => !q.includes(x.thread)))
+      lastQuiet = ''
+      return { text: 'Tidied ' + q.length + ' quiet drawer(s): ' + q.join(', ') }
+    }
+    if (verb === 'config') return { text: 'Config file: ' + $.plugin.root + '/threads.toml\n' + Object.entries(cfg).map(([k, v]) => k + ' = ' + v).join('\n') }
     if (verb === 'rename' && name && ws) {
       await update($, threads, list => list.some(t => t.name === name)
         ? list.filter(t => t.name !== ws).map(t => (t.name === name ? { ...t, name: ws } : t))
@@ -114,7 +153,7 @@ export const register: Register = on => {
       await update($, threads, list => list.filter(t => t.name !== name))
       return { text: 'Dropped thread ' + name + '.' }
     }
-    if (verb && !['open', 'add', 'drop', 'remove', 'rename', 'help'].includes(verb)) {
+    if (verb && !['open', 'add', 'drop', 'remove', 'rename', 'help', 'tidy', 'config'].includes(verb)) {
       // /threads <name> <task...>: everything after the name is the task; start a background agent filed there.
       const task = e.args.trim().slice(verb.length).trim()
       if (!task) return { text: 'Give a task after the name: /threads ' + verb + ' what to do' }
@@ -161,6 +200,18 @@ export const register: Register = on => {
     return { text: 'Threads pane opened.' }
   })
 
+  // Auto-organise: tell the model the drawers so it tags each agent; also pass on any tidy suggestion.
+  on('prompt.compose', async ($, e, next) => {
+    const r = await next(e)
+    const list = await read($, threads)
+    const parts: string[] = []
+    if (cfg.auto_organise) parts.push('Threads mod: when you start a background agent, begin its description with a [drawer] tag. Drawers now: ' + list.map(t => t.name).join(', ') + '. Reuse the drawer the work belongs to; if none fits, invent a short lowercase-hyphen name. Keep related tasks in one drawer.')
+    const q = cfg.suggest_tidy ? quietOnes(list, await read($, items)) : []
+    if (q.length) parts.push('Threads mod: these drawers have been quiet for ' + cfg.idle_minutes + '+ minutes: ' + q.join(', ') + '. At the end of your next reply, suggest once in one line that the person run /threads tidy.')
+    if (!parts.length) return r
+    return { sections: [...r.sections, { id: 'threads:organise', text: parts.join('\n'), scope: 'session' as const }] }
+  })
+
   on('agent.spawn', async ($, e, next) => {
     const r = await next(e)
     const id = ('agentId' in r && r.agentId) || e.tool_use_id
@@ -171,7 +222,7 @@ export const register: Register = on => {
       id, thread, title: (e.description || 'agent').replace(/\[[\w-]+\]\s*/, ''),
       status: 'running', started: Date.now(), seen: false,
     }
-    await update($, items, all => [...all.filter(x => x.id !== id), item].slice(-120))
+    await update($, items, all => [...all.filter(x => x.id !== id), item].slice(-cfg.keep_items))
     return r
   })
 
@@ -250,7 +301,7 @@ export const register: Register = on => {
                 {isOpen && <Text> </Text>}
                 {isOpen && <Button key={'d:' + name} plain dimColor onPress={async () => { await update($, threads, ts => ts.filter(t => t.name !== name)); await update($, items, xs => xs.filter(x => x.thread !== name || x.status === 'running')) }}>✕</Button>}
               </Box>
-              {isOpen && mine.slice(-6).reverse().map(x => {
+              {isOpen && mine.slice(-cfg.show_per_fold).reverse().map(x => {
                 const big = opened === x.id
                 const mark = x.status === 'running' ? spin : x.status === 'failed' ? '✗' : '✓'
                 return (

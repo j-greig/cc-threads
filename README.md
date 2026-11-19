@@ -64,6 +64,26 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 - The mod adds nothing to the status line. Your status line is yours.
 - Ask an agent to look up "42". Find out what happens.
 
+## Claude keeps it tidy ✧
+
+- **Auto-organise (on by default).** Claude sees your drawers and tags each agent it starts with one, reusing a drawer when the work fits and inventing a short name when nothing does.
+- **Tidy suggestions.** A drawer with no running agent and no news for 15 minutes counts as quiet. You get a toast, and Claude suggests `/threads tidy` once in chat. `/threads tidy` removes the quiet drawers.
+
+## Settings ⚙
+
+`threads.toml` in the mod folder (`/threads config` prints its path and the current values):
+
+```toml
+auto_organise = true    # Claude tags each agent with a drawer
+idle_minutes = 15       # quiet after this long with nothing running
+suggest_tidy = true     # toast + one-line suggestion to run /threads tidy
+show_per_fold = 6       # entries listed per open drawer
+keep_items = 120        # entries kept in total
+open_on_start = true    # open the pane when a session starts
+```
+
+Changes load on the next session.
+
 ## Who made it
 
 ༼つ◕‿◕‿⚆༽つ ༼つ⚆‿◕‿◕༽つ
