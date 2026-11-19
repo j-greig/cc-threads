@@ -53,8 +53,8 @@ let pending = ''
 const addNote = (all: Item[], id: string, note: string) =>
   all.map(x => (x.id === id && !(x.notes || []).includes(note) ? { ...x, notes: [...(x.notes || []), note].slice(-8), seen: false } : x))
 
-type Cfg = { auto_organise: boolean; idle_minutes: number; suggest_tidy: boolean; show_per_fold: number; keep_items: number; open_on_start: boolean; top_buttons_after: number }
-const CFG0: Cfg = { auto_organise: true, idle_minutes: 15, suggest_tidy: true, show_per_fold: 6, keep_items: 120, open_on_start: true, top_buttons_after: 15 }
+type Cfg = { auto_organise: boolean; idle_minutes: number; suggest_tidy: boolean; show_per_fold: number; keep_items: number; open_on_start: boolean; top_buttons_after: number; status_every_minutes: number }
+const CFG0: Cfg = { auto_organise: true, idle_minutes: 15, suggest_tidy: true, show_per_fold: 6, keep_items: 120, open_on_start: true, top_buttons_after: 15, status_every_minutes: 5 }
 let cfg: Cfg = { ...CFG0 }
 // threads.toml: flat "key = value" lines; # comments; unknown keys ignored.
 function parseToml(txt: string): Partial<Cfg> {
@@ -128,6 +128,11 @@ export const register: Register = on => {
       }
       delete m._rename
       for (const [id, ns] of Object.entries(m as Record<string, string[]>)) for (const n of ns) await update($, items, all => addNote(all, id, n))
+    })
+    // Status bubbles: every status_every_minutes, a long-running entry flashes its progress for a minute.
+    if (cfg.status_every_minutes > 0) $.clock.every(30000, async () => {
+      const now = Date.now(), gap = cfg.status_every_minutes * 60000
+      await update($, items, xs => xs.map(x => x.status === 'running' && now - x.started >= gap && now - (x.bubbleAt || x.started) >= gap ? { ...x, bubbleAt: now } : x))
     })
     if (cfg.suggest_tidy) $.clock.every(60000, async () => {
       const q = quietOnes(await read($, threads), await read($, items))
@@ -237,6 +242,19 @@ export const register: Register = on => {
     return { sections: [...r.sections, { id: 'threads:organise', text: parts.join('\n'), scope: 'session' as const }] }
   })
 
+  // Live steps: a subagent's tool calls carry its agentId; keep the latest one on its entry.
+  on('tool.call', async ($, e, next) => {
+    const id = e.agentId
+    if (id) {
+      const inp = e as unknown as Record<string, unknown>
+      const what = String(inp.description || inp.command || inp.file_path || inp.pattern || inp.url || inp.code || '').replace(/\s+/g, ' ').slice(0, 70)
+      const step = e.tool + (what ? ' · ' + what : '')
+      const all = await read($, items)
+      if (all.some(x => x.id === id && x.status === 'running')) await update($, items, xs => xs.map(x => x.id === id ? { ...x, step, steps: (x.steps || 0) + 1 } : x))
+    }
+    return next(e)
+  })
+
   on('agent.spawn', async ($, e, next) => {
     const r = await next(e)
     const id = ('agentId' in r && r.agentId) || e.tool_use_id
@@ -335,6 +353,8 @@ export const register: Register = on => {
                 const acts = (at: string) => (
                   <Box flexDirection="row">
                     <Button key={'a' + at + ':' + x.id} plain dimColor onPress={() => $.prompt.fill({ text: '⟜ threads › ' + x.thread + ' › "' + x.title + '" (agent ' + x.id + ')\n', mode: 'insert' })}>{x.status === 'running' ? '↳ message' : '↳ reply'}</Button>
+                    {x.status === 'running' && <Text>   </Text>}
+                    {x.status === 'running' && <Button key={'w' + at + ':' + x.id} plain dimColor onPress={() => { void $.ui.view({ agentId: x.id }) }}>◉ watch</Button>}
                     <Text>   </Text>
                     <Button key={'x' + at + ':' + x.id} plain dimColor onPress={async () => { await update($, items, xs => xs.filter(y => y.id !== x.id)); await update($, open1, () => '') }}>✕ remove</Button>
                   </Box>
@@ -349,6 +369,9 @@ export const register: Register = on => {
                       </Button>
                       <Text dimColor>{'  ' + (x.status === 'running' ? ago(x.started) : hhmm(x.ended || x.started))}</Text>
                     </Box>
+                    {x.status === 'running' && x.step && (Date.now() - (x.bubbleAt || 0) < 60000
+                      ? <Text color={hue} bold wrap="truncate-end">{'  ◆ ' + ago(x.started) + ' · ' + (x.steps || 0) + ' steps · now ' + x.step}</Text>
+                      : <Text dimColor wrap="truncate-end">{'  ⋯ ' + x.step}</Text>)}
                     {!big && x.report && <Text dimColor wrap="truncate-end">{'  ' + x.report}</Text>}
                     {big && rows > cfg.top_buttons_after && acts('t')}
                     {big && <Text wrap="wrap">{body}</Text>}

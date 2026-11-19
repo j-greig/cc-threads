@@ -10,6 +10,9 @@ export type Item = {
   full?: string
   seen: boolean
   notes?: string[]
+  step?: string
+  steps?: number
+  bubbleAt?: number
 }
 
 declare module 'claude-code' {

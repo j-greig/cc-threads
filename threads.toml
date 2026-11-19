@@ -6,3 +6,4 @@ show_per_fold = 6       # entries listed per open drawer
 keep_items = 120        # entries kept in total
 open_on_start = true    # open the pane when a session starts
 top_buttons_after = 15  # an open entry longer than this many lines also shows reply/remove at its top
+status_every_minutes = 5  # a running entry flashes its progress (time, steps, current step) this often; 0 turns it off
