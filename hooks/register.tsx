@@ -70,7 +70,7 @@ export const register: Register = on => {
       await $.store.set('threads', t)
       await $.store.set('items', i)
     })
-    await $.command.register({ name: 'threads', description: 'Open the pane  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' })
+    await $.command.register({ name: 'threads', description: '/threads <name> <task> sends an agent  |  open the pane  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' })
     await $.command.register({
       name: 'thread',
       description: 'Add or change a thread: /thread <name> word1,word2  |  /thread drop <name>',
@@ -114,7 +114,16 @@ export const register: Register = on => {
       await update($, threads, list => list.filter(t => t.name !== name))
       return { text: 'Dropped thread ' + name + '.' }
     }
-    if (verb && verb !== 'open') return { text: 'Usage: /threads  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' }
+    if (verb && !['open', 'add', 'drop', 'remove', 'rename', 'help'].includes(verb)) {
+      // /threads <name> <task...>: everything after the name is the task; start a background agent filed there.
+      const task = e.args.trim().slice(verb.length).trim()
+      if (!task) return { text: 'Give a task after the name: /threads ' + verb + ' what to do' }
+      await update($, threads, list => list.some(t => t.name === verb) ? list : [...list, { name: verb, words: [verb], isOpen: true }])
+      await $.ui.open({ id: PANE, title: 'Threads' })
+      void $.prompt.submit({ asUser: true, text: '⟜ threads › ' + verb + ' › new task\nStart one background agent (run_in_background) with the description "[' + verb + '] ' + task.slice(0, 50).replace(/"/g, "'") + '" and this task as its prompt, then reply in one line:\n' + task })
+      return { text: 'Sending a ' + verb + ' agent: ' + task.slice(0, 80) }
+    }
+    if (verb && verb !== 'open') return { text: 'Usage: /threads <name> <task>  |  /threads  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' }
     await $.ui.open({ id: PANE, title: 'Threads' })
     return { text: 'Threads pane opened.' }
   })
