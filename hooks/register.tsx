@@ -70,7 +70,7 @@ export const register: Register = on => {
       await $.store.set('threads', t)
       await $.store.set('items', i)
     })
-    await $.command.register({ name: 'threads', description: 'Open the pane  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads drop <name>' })
+    await $.command.register({ name: 'threads', description: 'Open the pane  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' })
     await $.command.register({
       name: 'thread',
       description: 'Add or change a thread: /thread <name> word1,word2  |  /thread drop <name>',
@@ -103,11 +103,18 @@ export const register: Register = on => {
       await $.ui.open({ id: PANE, title: 'Threads' })
       return { text: 'Added thread ' + name + ' (files agents matching: ' + words.join(', ') + '; or tag [' + name + '])' }
     }
+    if (verb === 'rename' && name && ws) {
+      await update($, threads, list => list.some(t => t.name === name)
+        ? list.filter(t => t.name !== ws).map(t => (t.name === name ? { ...t, name: ws } : t))
+        : [...list.filter(t => t.name !== ws), { name: ws, words: [ws], isOpen: true }])
+      await update($, items, xs => xs.map(x => (x.thread === name ? { ...x, thread: ws } : x)))
+      return { text: 'Renamed thread ' + name + ' to ' + ws + '.' }
+    }
     if ((verb === 'drop' || verb === 'remove') && name) {
       await update($, threads, list => list.filter(t => t.name !== name))
       return { text: 'Dropped thread ' + name + '.' }
     }
-    if (verb && verb !== 'open') return { text: 'Usage: /threads  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads drop <name>' }
+    if (verb && verb !== 'open') return { text: 'Usage: /threads  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' }
     await $.ui.open({ id: PANE, title: 'Threads' })
     return { text: 'Threads pane opened.' }
   })
