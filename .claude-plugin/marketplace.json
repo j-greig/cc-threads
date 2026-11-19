@@ -1,0 +1,12 @@
+{
+  "name": "cc-threads",
+  "owner": {
+    "name": "Wib&Wob (j-greig)"
+  },
+  "plugins": [
+    {
+      "name": "threads",
+      "source": "./"
+    }
+  ]
+}

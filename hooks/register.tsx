@@ -1,0 +1,210 @@
+import { atom, read, update } from 'claude-code'
+import type { Register } from 'claude-code'
+
+import type { Item, Thread } from '../types'
+
+// Threads: one fold per piece of work. Each background agent is filed under a thread
+// when it starts and its report lands there when it ends, so reports stop piling into the chat.
+// Filing: a "[name]" tag in the Agent description wins, then the first thread whose words
+// appear in the description or prompt, else "other".
+const PANE = 'threads'
+const threads = atom({ plugin: 'threads', key: 'threads' } as const, [], { shape: 'threads-1' })
+const items = atom({ plugin: 'threads', key: 'items' } as const, [], { shape: 'items-1' })
+const open1 = atom({ plugin: 'threads', key: 'open1' } as const, '', { shape: 'open1-1' })
+const hintOff = atom({ plugin: 'threads', key: 'hintOff' } as const, false, { shape: 'hintOff-1' })
+const tick = atom({ plugin: 'threads', key: 'tick' } as const, 0, { shape: 'tick-1' })
+
+const DEFAULTS: Thread[] = [
+  { name: 'build', words: ['build', 'fix', 'implement', 'refactor'], isOpen: true },
+  { name: 'research', words: ['research', 'search', 'find', 'explore', 'docs'], isOpen: true },
+  { name: 'review', words: ['review', 'audit', 'test', 'check'], isOpen: false },
+]
+
+function pick(list: Thread[], desc: string, prompt: string): string {
+  const tag = /\[([\w-]+)\]/.exec(desc)
+  if (tag && tag[1]) return tag[1].toLowerCase()
+  const d = desc.toLowerCase()
+  const p = prompt.slice(0, 2000).toLowerCase()
+  for (const t of list) if (t.words.some(w => d.includes(w))) return t.name
+  for (const t of list) if (t.words.some(w => p.includes(w))) return t.name
+  return 'other'
+}
+
+const HUES = ['#e0a050', '#5fafd7', '#87d787', '#d787d7', '#d7d75f', '#5fd7af']
+const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+function ago(ms: number): string {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000))
+  return s < 60 ? s + 's' : s < 3600 ? Math.round(s / 60) + 'm' : Math.round(s / 3600) + 'h'
+}
+
+function hhmm(ms: number): string {
+  const d = new Date(ms)
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
+}
+
+function gist(answer: string): string {
+  const lines = answer.split('\n').map(s => s.replace(/[*#>`]/g, '').trim()).filter(Boolean)
+  return lines.slice(0, 3).join(' ').slice(0, 300)
+}
+
+
+export const register: Register = on => {
+  on('session.start', async ($, e, next) => {
+    // $.state ends with the session; $.store keeps threads and reports across sessions.
+    const savedT = (await $.store.get('threads')) as Thread[] | undefined
+    const savedI = (await $.store.get('items')) as Item[] | undefined
+    await update($, threads, list => list.length ? list : savedT && savedT.length ? savedT : DEFAULTS)
+    await update($, items, list => list.length ? list : savedI ?? [])
+    if (await $.store.get('hintOff')) await update($, hintOff, () => true)
+    let last = ''
+    $.clock.every(2000, async () => {
+      const snap = JSON.stringify([await read($, threads), await read($, items)])
+      if (snap === last) return
+      last = snap
+      const [t, i] = JSON.parse(snap)
+      await $.store.set('threads', t)
+      await $.store.set('items', i)
+    })
+    await $.command.register({ name: 'threads', description: 'Open the threads pane' })
+    await $.command.register({
+      name: 'thread',
+      description: 'Add or change a thread: /thread <name> word1,word2  |  /thread drop <name>',
+    })
+    $.clock.every(250, async () => {
+      const xs = await read($, items)
+      const run = xs.filter(x => x.status === 'running')
+      const fresh = xs.filter(x => x.status !== 'running' && !x.seen).length
+      if (run.length) await update($, tick, n => n + 1)
+      $.ui.status(run.length || fresh ? 'threads ' + (run.length ? run.length + ' running ' : '') + (fresh ? fresh + ' new' : '') : undefined)
+    })
+    void $.ui.open({ id: PANE, title: 'Threads' })
+    return next(e)
+  })
+
+  on('command.run', { command: 'threads' }, async $ => {
+    await $.ui.open({ id: PANE, title: 'Threads' })
+    return { text: 'Threads pane opened.' }
+  })
+
+  on('command.run', { command: 'thread' }, async ($, e) => {
+    const [a, b, c] = e.args.trim().split(/\s+/)
+    if (!a) return { text: 'Usage: /thread <name> word1,word2  or  /thread drop <name>' }
+    if (a === 'drop' && b) {
+      await update($, threads, list => list.filter(t => t.name !== b))
+      return { text: 'Dropped thread ' + b + '.' }
+    }
+    const words = (b || a).split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+    await update($, threads, list => {
+      const rest = list.filter(t => t.name !== a)
+      return [...rest, { name: a, words, isOpen: true }]
+    })
+    void c
+    return { text: 'Thread ' + a + ' files agents matching: ' + words.join(', ') }
+  })
+
+  on('agent.spawn', async ($, e, next) => {
+    const r = await next(e)
+    const id = ('agentId' in r && r.agentId) || e.tool_use_id
+    if (!id) return r
+    const list = await read($, threads)
+    const thread = pick(list, e.description || '', e.prompt || '')
+    const item: Item = {
+      id, thread, title: (e.description || 'agent').replace(/\[[\w-]+\]\s*/, ''),
+      status: 'running', started: Date.now(), seen: false,
+    }
+    await update($, items, all => [...all.filter(x => x.id !== id), item].slice(-120))
+    return r
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    const r = await next(e)
+    if (!e.agentId) return r
+    const all = await read($, items)
+    const hit = all.find(x => x.id === e.agentId)
+    if (!hit) return r
+    await update($, items, list => list.map(x => x.id === e.agentId ? {
+      ...x, status: e.reason === 'answer' ? 'done' : 'failed', ended: Date.now(),
+      report: gist(e.answer || ''), full: (e.answer || '').slice(0, 4000), seen: false,
+    } : x))
+    $.ui.toast(hit.thread + ': ' + hit.title + ' reported')
+    return r
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const dismissed = await read($, hintOff)
+    const docked = e.props.placement === 'dock' && e.viewport?.isFullscreen !== false
+    const narrow = (e.props.bodyColumns ?? 80) < 34
+    const list = await read($, threads)
+    const all = await read($, items)
+    const opened = await read($, open1)
+    const n = await read($, tick)
+    const spin = SPIN[n % SPIN.length]
+    const known = (x: Item) => list.some(t => t.name === x.thread)
+    const names = [...list.map(t => t.name), ...[...new Set(all.filter(x => !known(x)).map(x => x.thread))]]
+    const toggle = async (name: string) => {
+      await update($, threads, ts => ts.find(t => t.name === name)
+        ? ts.map(t => (t.name === name ? { ...t, isOpen: !t.isOpen } : t))
+        : [...ts, { name, words: [], isOpen: false }])
+      await update($, items, xs => xs.map(x => (x.thread === name ? { ...x, seen: true } : x)))
+    }
+    const clear = (name: string) => update($, items, xs => xs.filter(x => x.thread !== name || x.status === 'running'))
+    return (
+      <Box flexDirection="column">
+        {!dismissed && (!docked || narrow) && (
+          <Box flexDirection="column" borderStyle="round" borderColor="#d7d75f" paddingX={1} marginBottom={1}>
+            <Text bold>Threads works best as a right sidebar</Text>
+            <Text>1. Run /tui fullscreen (or launch with CLAUDE_CODE_NO_FLICKER=1)</Text>
+            <Text>2. Widen the terminal to 140+ columns; below that the pane sits above the prompt</Text>
+            <Text dimColor>Clicks reach the pane only in fullscreen. Keys: ctrl+x tab, then 1-9.</Text>
+            <Button key="hint-off" plain dimColor onPress={async () => { await update($, hintOff, () => true); await $.store.set('hintOff', true) }}>[ got it ]</Button>
+          </Box>
+        )}
+        {names.map((name, i) => {
+          const hue = HUES[i % HUES.length]
+          const t = list.find(x => x.name === name)
+          const isOpen = t ? t.isOpen : true
+          const mine = all.filter(x => x.thread === name)
+          const running = mine.filter(x => x.status === 'running').length
+          const fresh = mine.filter(x => x.status !== 'running' && !x.seen).length
+          return (
+            <Box flexDirection="column" key={name} marginBottom={1}>
+              <Box flexDirection="row">
+                <Button key={'t:' + name} hotkey={i < 9 ? String(i + 1) : undefined} plain onPress={() => toggle(name)}>
+                  <Text color={hue} bold>{(isOpen ? '[▾] ' : '[▸] ') + name}</Text>
+                </Button>
+                <Text> </Text>
+                {running > 0 && <Text color={hue}>{spin + ' ' + running + ' running '}</Text>}
+                {fresh > 0 && <Text inverse color={hue}>{' ' + fresh + ' new '}</Text>}
+                {!running && !fresh && <Text dimColor>{mine.length ? mine.length + (mine.length === 1 ? ' entry' : ' entries') : 'empty'}</Text>}
+                {isOpen && mine.some(x => x.status !== 'running') && <Text> </Text>}
+                {isOpen && mine.some(x => x.status !== 'running') && <Button key={'c:' + name} plain dimColor onPress={() => clear(name)}>clear</Button>}
+              </Box>
+              {isOpen && mine.slice(-6).reverse().map(x => {
+                const big = opened === x.id
+                const mark = x.status === 'running' ? spin : x.status === 'failed' ? '✗' : '✓'
+                return (
+                  <Box flexDirection="column" key={x.id} paddingLeft={2} borderStyle={big ? 'single' : undefined} borderColor={hue}>
+                    <Box flexDirection="row">
+                      <Text color={x.status === 'failed' ? 'red' : hue}>{mark + ' '}</Text>
+                      <Button key={'i:' + x.id} plain onPress={() => update($, open1, cur => (cur === x.id ? '' : x.id))}>
+                        <Text bold={!x.seen && x.status !== 'running'}>{x.title}</Text>
+                      </Button>
+                      <Text dimColor>{'  ' + (x.status === 'running' ? ago(x.started) : hhmm(x.ended || x.started))}</Text>
+                    </Box>
+                    {!big && x.report && <Text dimColor wrap="truncate-end">{'  ' + x.report}</Text>}
+                    {big && <Text wrap="wrap">{x.full || x.report || 'still running'}</Text>}
+                    {big && x.status !== 'running' && (
+                      <Button key={'a:' + x.id} plain dimColor onPress={() => $.prompt.fill({ text: 'about "' + x.title + '": ', mode: 'insert' })}>↳ reply about this</Button>
+                    )}
+                  </Box>
+                )
+              })}
+            </Box>
+          )
+        })}
+        <Text dimColor>1-9 fold · click a line to read it · /thread name word,word</Text>
+      </Box>
+    )
+  })
+}

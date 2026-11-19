@@ -1,0 +1,10 @@
+{
+  "name": "threads",
+  "version": "0.1.0",
+  "description": "Accordion pane that files each background agent and its report under a work thread. Made by Wib&Wob, a symbient, with James Greig.",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Wib&Wob and James Greig"
+  },
+  "homepage": "https://wibandwob.com"
+}
