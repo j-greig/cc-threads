@@ -51,7 +51,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 ## Things you can do ✕ ↳ ⟜
 
 - Each agent is filed by words in its description or prompt. Put `[name]` in an agent's description to choose its fold; a new name makes a new fold.
-- `/threads 42-meaning what does 42 mean?` sends an agent off with that task, filed in that drawer (made if new). Everything after the name is the task, no quotes needed. Run it again for another task.
+- `/threads 42-meaning what does 42 mean?` sends an agent off with that task, filed in that drawer (made if new). Everything after the name is the task, no quotes needed. Run it again for another task. Or click `+ task` on an open drawer's header: it types `/threads <name> ` into your prompt for you. `/thread` is the same command.
 - `/threads add music song,stems,mix` adds a drawer called music. The words after the name are keywords: any agent whose task mentions song, stems or mix gets filed in that drawer. Leave them off and the name itself is the keyword. `/threads rename music songs` renames a drawer and keeps its entries. `/threads drop music` removes it. `/threads` reopens the pane.
 - Click a line to open the entry and read the full report. Click again to close it.
 - An open entry ends with one row: `↳ reply` (finished entries) or `↳ message` (running ones), then `✕ remove`. `✕ remove` drops that entry.

@@ -73,7 +73,7 @@ export const register: Register = on => {
     await $.command.register({ name: 'threads', description: '/threads <name> <task> sends an agent  |  open the pane  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' })
     await $.command.register({
       name: 'thread',
-      description: 'Add or change a thread: /thread <name> word1,word2  |  /thread drop <name>',
+      description: 'Same as /threads: /thread <name> <task> sends an agent',
     })
     $.clock.every(250, async () => {
       const xs = await read($, items)
@@ -129,30 +129,36 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'thread' }, async ($, e) => {
-    const [a, b, c] = e.args.trim().split(/\s+/)
-    if (!a) return { text: 'Usage: /thread <name> word1,word2  or  /thread drop <name>' }
-    if (a === 'drop' && b) {
-      await update($, threads, list => list.filter(t => t.name !== b))
-      return { text: 'Dropped thread ' + b + '.' }
+    const [verb, name, ws] = e.args.trim().split(/\s+/)
+    if (verb === 'add' && name) {
+      const words = (ws || name).split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+      await update($, threads, list => [...list.filter(t => t.name !== name), { name, words, isOpen: true }])
+      await $.ui.open({ id: PANE, title: 'Threads' })
+      return { text: 'Added thread ' + name + ' (files agents matching: ' + words.join(', ') + '; or tag [' + name + '])' }
     }
-    const words = (b || a).split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-    await update($, threads, list => {
-      const rest = list.filter(t => t.name !== a)
-      return [...rest, { name: a, words, isOpen: true }]
-    })
-    void c
-    return { text: 'Thread ' + a + ' files agents matching: ' + words.join(', ') }
-  })
-
-  // A prompt that starts with the ⟜ marker is filed as a note on that entry, and so is the answer to it.
-  on('prompt.submit', async ($, e, next) => {
-    const m = MARK.exec(e.text)
-    if (m && m[1]) {
-      pending = m[1]
-      const said = (m[2] || '').trim().split('\n')[0]?.slice(0, 140)
-      if (said) await update($, items, all => addNote(all, pending, 'you: ' + said))
+    if (verb === 'rename' && name && ws) {
+      await update($, threads, list => list.some(t => t.name === name)
+        ? list.filter(t => t.name !== ws).map(t => (t.name === name ? { ...t, name: ws } : t))
+        : [...list.filter(t => t.name !== ws), { name: ws, words: [ws], isOpen: true }])
+      await update($, items, xs => xs.map(x => (x.thread === name ? { ...x, thread: ws } : x)))
+      return { text: 'Renamed thread ' + name + ' to ' + ws + '.' }
     }
-    return next(e)
+    if ((verb === 'drop' || verb === 'remove') && name) {
+      await update($, threads, list => list.filter(t => t.name !== name))
+      return { text: 'Dropped thread ' + name + '.' }
+    }
+    if (verb && !['open', 'add', 'drop', 'remove', 'rename', 'help'].includes(verb)) {
+      // /threads <name> <task...>: everything after the name is the task; start a background agent filed there.
+      const task = e.args.trim().slice(verb.length).trim()
+      if (!task) return { text: 'Give a task after the name: /threads ' + verb + ' what to do' }
+      await update($, threads, list => list.some(t => t.name === verb) ? list : [...list, { name: verb, words: [verb], isOpen: true }])
+      await $.ui.open({ id: PANE, title: 'Threads' })
+      void $.prompt.submit({ asUser: true, text: '⟜ threads › ' + verb + ' › new task\nStart one background agent (run_in_background) with the description "[' + verb + '] ' + task.slice(0, 50).replace(/"/g, "'") + '" and this task as its prompt, then reply in one line:\n' + task })
+      return { text: 'Sending a ' + verb + ' agent: ' + task.slice(0, 80) }
+    }
+    if (verb && verb !== 'open') return { text: 'Usage: /threads <name> <task>  |  /threads  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' }
+    await $.ui.open({ id: PANE, title: 'Threads' })
+    return { text: 'Threads pane opened.' }
   })
 
   on('agent.spawn', async ($, e, next) => {
@@ -239,6 +245,8 @@ export const register: Register = on => {
                 {!running && !fresh && <Text dimColor>{mine.length ? mine.length + (mine.length === 1 ? ' entry' : ' entries') : 'empty'}</Text>}
                 {isOpen && mine.some(x => x.status !== 'running') && <Text> </Text>}
                 {isOpen && mine.some(x => x.status !== 'running') && <Button key={'c:' + name} plain dimColor onPress={() => clear(name)}>clear</Button>}
+                {isOpen && <Text> </Text>}
+                {isOpen && <Button key={'p:' + name} plain color={hue} onPress={() => $.prompt.fill({ text: '/threads ' + name + ' ', mode: 'replace' })}>+ task</Button>}
                 {isOpen && <Text> </Text>}
                 {isOpen && <Button key={'d:' + name} plain dimColor onPress={async () => { await update($, threads, ts => ts.filter(t => t.name !== name)); await update($, items, xs => xs.filter(x => x.thread !== name || x.status === 'running')) }}>✕</Button>}
               </Box>
