@@ -1,7 +1,20 @@
-# threads
+# threads ༼つ◕‿◕‿⚆༽つ ༼つ⚆‿◕‿◕༽つ
 
-A Claude Code mod. Background agents report into folds beside the chat, one fold per piece of work, instead of piling into the main scroll.
+**a chest of drawers for your Claude Code agents.**
 
+You send five agents out. Five reports come back and pile up in one long scroll, and the one you wanted is somewhere under a diff. threads gives each piece of work its own drawer in a sidebar. Agents get filed on the way out. Their reports land in the right drawer on the way back, with a little spinner while they're still out there.
+
+```
+   ┌──────────────────────────────┐
+   │ [▾] build   ⠹ 1 running 2 new│ ← the spinner means it's still out working
+   ├──────────────────────────────┤
+   │ [▸] research   3 entries     │ ← closed drawer, counts only
+   ├──────────────────────────────┤
+   │ [▸] review     empty    /ᐠ｡ﻌ｡ᐟ│ ← someone sleeps in here
+   └──────────────────────────────┘
+```
+
+Open a drawer and it looks like this:
 ```
 [▾] build     ⠹ 1 running  2 new  clear ✕
   ⠹ wire the export button     42s
@@ -18,7 +31,7 @@ A Claude Code mod. Background agents report into folds beside the chat, one fold
 1-9 fold · click a line to read it · /thread name word,word
 ```
 
-## Install
+## Install ✦
 
 ```
 /plugin install threads --marketplace j-greig/cc-threads
@@ -26,16 +39,16 @@ A Claude Code mod. Background agents report into folds beside the chat, one fold
 
 Answer `y` to add the marketplace, then pick a scope.
 
-## Set up the sidebar
+## Set up the sidebar ▐
 
 The pane docks on the right only in Claude Code's fullscreen layout, in a wide window.
 
 1. Run `/tui fullscreen`, or start Claude Code with `CLAUDE_CODE_NO_FLICKER=1`.
 2. Widen the terminal to 140 columns or more. Narrower, the pane sits above the prompt.
 
-Mouse clicks reach the pane only in fullscreen. From the keyboard: ctrl+x then tab to focus it, 1-9 to open and close folds, Esc to go back.
+Narrow terminals get the drawers stacked above the prompt, which works but is sad. Mouse clicks reach the pane only in fullscreen. From the keyboard: ctrl+x then tab to focus it, 1-9 to open and close folds, Esc to go back.
 
-## Use
+## Things you can do ✕ ↳ ⟜
 
 - Each agent is filed by words in its description or prompt. Put `[name]` in an agent's description to choose its fold; a new name makes a new fold.
 - `/thread music song,stems,mix` adds a fold with its match words. `/thread drop music` removes it. `/threads` reopens the pane.
@@ -47,7 +60,8 @@ Mouse clicks reach the pane only in fullscreen. From the keyboard: ctrl+x then t
 - Claude can add notes itself by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}`.
 - Running agents show a spinner and their age. New reports show a badge until you open the fold.
 - Folds, reports and notes are kept across sessions.
-- The mod adds nothing to the status line.
+- The mod adds nothing to the status line. Your status line is yours.
+- Ask an agent to look up "42". Find out what happens.
 
 ## Who made it
 
