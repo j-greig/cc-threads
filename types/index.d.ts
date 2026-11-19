@@ -9,6 +9,7 @@ export type Item = {
   report?: string
   full?: string
   seen: boolean
+  notes?: string[]
 }
 
 declare module 'claude-code' {

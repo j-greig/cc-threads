@@ -48,6 +48,11 @@ function gist(answer: string): string {
 }
 
 
+const MARK = /^⟜ threads › .*\(agent ([^)]+)\)\s*\n?([\s\S]*)/
+let pending = ''
+const addNote = (all: Item[], id: string, note: string) =>
+  all.map(x => (x.id === id && !(x.notes || []).includes(note) ? { ...x, notes: [...(x.notes || []), note].slice(-8), seen: false } : x))
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     // $.state ends with the session; $.store keeps threads and reports across sessions.
@@ -77,6 +82,14 @@ export const register: Register = on => {
       if (run.length) await update($, tick, n => n + 1)
       $.ui.status(run.length || fresh ? 'threads ' + (run.length ? run.length + ' running ' : '') + (fresh ? fresh + ' new' : '') : undefined)
     })
+    // Optional notes file: {"<item id>": ["note", ...]}; lets the main session annotate entries.
+    $.clock.every(3000, async () => {
+      let txt = ''
+      try { txt = await $.fs.read($.plugin.root + '/inbox.json') } catch { return }
+      let m: Record<string, string[]> = {}
+      try { m = JSON.parse(txt) } catch { return }
+      for (const [id, ns] of Object.entries(m)) for (const n of ns) await update($, items, all => addNote(all, id, n))
+    })
     void $.ui.open({ id: PANE, title: 'Threads' })
     return next(e)
   })
@@ -102,6 +115,17 @@ export const register: Register = on => {
     return { text: 'Thread ' + a + ' files agents matching: ' + words.join(', ') }
   })
 
+  // A prompt that starts with the ⟜ marker is filed as a note on that entry, and so is the answer to it.
+  on('prompt.submit', async ($, e, next) => {
+    const m = MARK.exec(e.text)
+    if (m && m[1]) {
+      pending = m[1]
+      const said = (m[2] || '').trim().split('\n')[0]?.slice(0, 140)
+      if (said) await update($, items, all => addNote(all, pending, 'you: ' + said))
+    }
+    return next(e)
+  })
+
   on('agent.spawn', async ($, e, next) => {
     const r = await next(e)
     const id = ('agentId' in r && r.agentId) || e.tool_use_id
@@ -118,7 +142,14 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
-    if (!e.agentId) return r
+    if (!e.agentId) {
+      if (pending && e.reason === 'answer') {
+        const id = pending
+        pending = ''
+        await update($, items, all => addNote(all, id, gist(e.answer || '').slice(0, 160)))
+      }
+      return r
+    }
     const all = await read($, items)
     const hit = all.find(x => x.id === e.agentId)
     if (!hit) return r
@@ -196,6 +227,8 @@ export const register: Register = on => {
                     </Box>
                     {!big && x.report && <Text dimColor wrap="truncate-end">{'  ' + x.report}</Text>}
                     {big && <Text wrap="wrap">{x.full || x.report || 'still running'}</Text>}
+                    {big && (x.notes || []).map((n, k) => <Text key={'n' + k} color={n.startsWith('you:') ? undefined : hue} wrap="wrap">{'⟜ ' + n}</Text>)}
+                    {!big && (x.notes || []).length > 0 && <Text dimColor wrap="truncate-end">{'  ⟜ ' + (x.notes || [])[(x.notes || []).length - 1]}</Text>}
                     {big && (
                       <Box flexDirection="row">
                         <Button key={'a:' + x.id} plain dimColor onPress={() => $.prompt.fill({ text: '⟜ threads › ' + x.thread + ' › "' + x.title + '" (agent ' + x.id + ')\n', mode: 'insert' })}>{x.status === 'running' ? '↳ message' : '↳ reply'}</Button>
