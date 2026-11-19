@@ -1,6 +1,6 @@
 ![threads pane beside a Claude Code session](docs/screenshot.png)
 
-# threads ༼つ◕‿◕‿⚆༽つ ༼つ⚆‿◕‿◕༽つ /ᐠ｡ﻌ｡ᐟ\
+# threads
 
 **a chest of drawers for your Claude Code agents.**
 
