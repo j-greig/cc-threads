@@ -28,7 +28,7 @@ Open a drawer and it looks like this:
 [▸] research  3 entries
 [▸] review    empty
 
-1-9 fold · click a line to read it · /thread name word,word
+1-9 fold · click a line to read it · /threads add name
 ```
 
 ## Install ✦
@@ -51,7 +51,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 ## Things you can do ✕ ↳ ⟜
 
 - Each agent is filed by words in its description or prompt. Put `[name]` in an agent's description to choose its fold; a new name makes a new fold.
-- `/thread music song,stems,mix` adds a fold with its match words. `/thread drop music` removes it. `/threads` reopens the pane.
+- `/threads add music song,stems,mix` adds a drawer with its match words (leave the words off and the name is the word). `/threads drop music` removes it. `/threads` reopens the pane. The older `/thread music …` still works.
 - Click a line to open the entry and read the full report. Click again to close it.
 - An open entry ends with one row: `↳ reply` (finished entries) or `↳ message` (running ones), then `✕ remove`. `✕ remove` drops that entry.
 - `↳ reply` and `↳ message` fill your prompt with a marker line: `⟜ threads › build › "title" (agent id)`. Type under it. The line says which entry the prompt is about, so Claude can look up that agent.

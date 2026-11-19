@@ -70,7 +70,7 @@ export const register: Register = on => {
       await $.store.set('threads', t)
       await $.store.set('items', i)
     })
-    await $.command.register({ name: 'threads', description: 'Open the threads pane' })
+    await $.command.register({ name: 'threads', description: 'Open the pane  |  /threads add <name> [word,word]  |  /threads drop <name>' })
     await $.command.register({
       name: 'thread',
       description: 'Add or change a thread: /thread <name> word1,word2  |  /thread drop <name>',
@@ -95,7 +95,19 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'threads' }, async $ => {
+  on('command.run', { command: 'threads' }, async ($, e) => {
+    const [verb, name, ws] = e.args.trim().split(/\s+/)
+    if (verb === 'add' && name) {
+      const words = (ws || name).split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+      await update($, threads, list => [...list.filter(t => t.name !== name), { name, words, isOpen: true }])
+      await $.ui.open({ id: PANE, title: 'Threads' })
+      return { text: 'Added thread ' + name + ' (files agents matching: ' + words.join(', ') + '; or tag [' + name + '])' }
+    }
+    if ((verb === 'drop' || verb === 'remove') && name) {
+      await update($, threads, list => list.filter(t => t.name !== name))
+      return { text: 'Dropped thread ' + name + '.' }
+    }
+    if (verb && verb !== 'open') return { text: 'Usage: /threads  |  /threads add <name> [word,word]  |  /threads drop <name>' }
     await $.ui.open({ id: PANE, title: 'Threads' })
     return { text: 'Threads pane opened.' }
   })
@@ -243,7 +255,7 @@ export const register: Register = on => {
             </Box>
           )
         })}
-        <Text dimColor>1-9 fold · click a line to read it · /thread name word,word</Text>
+        <Text dimColor>1-9 fold · click a line to read it · /threads add name</Text>
       </Box>
     )
   })
