@@ -111,9 +111,16 @@ export const register: Register = on => {
     $.clock.every(3000, async () => {
       let txt = ''
       try { txt = await $.fs.read($.plugin.root + '/inbox.json') } catch { return }
-      let m: Record<string, string[]> = {}
+      let m: Record<string, unknown> = {}
       try { m = JSON.parse(txt) } catch { return }
-      for (const [id, ns] of Object.entries(m)) for (const n of ns) await update($, items, all => addNote(all, id, n))
+      // "_move": {"<item id>": "<drawer>"} lets the main session file an entry; the drawer is made if missing.
+      const mv = (m._move || {}) as Record<string, string>
+      for (const [id, to] of Object.entries(mv)) {
+        if (!(await read($, threads)).some(t => t.name === to)) await update($, threads, l => [...l, { name: to, words: [to], isOpen: true }])
+        await update($, items, all => all.map(x => x.id === id && x.thread !== to ? { ...x, thread: to } : x))
+      }
+      delete m._move
+      for (const [id, ns] of Object.entries(m as Record<string, string[]>)) for (const n of ns) await update($, items, all => addNote(all, id, n))
     })
     if (cfg.suggest_tidy) $.clock.every(60000, async () => {
       const q = quietOnes(await read($, threads), await read($, items))
@@ -223,7 +230,9 @@ export const register: Register = on => {
     const r = await next(e)
     const id = ('agentId' in r && r.agentId) || e.tool_use_id
     if (!id) return r
-    const list = await read($, threads)
+    let list = await read($, threads)
+    const tag = /^\[([\w-]+)\]/.exec(e.description || '')?.[1]
+    if (tag && !list.some(t => t.name === tag)) { await update($, threads, l => [...l, { name: tag, words: [tag], isOpen: true }]); list = await read($, threads) }
     const thread = pick(list, e.description || '', e.prompt || '')
     const item: Item = {
       id, thread, title: (e.description || 'agent').replace(/\[[\w-]+\]\s*/, ''),
