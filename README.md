@@ -78,7 +78,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 - A prompt that starts with the `⟜` line is filed as a `⟜` note on that entry, and so is Claude's answer. Notes show under the report when the entry is open, and the latest one shows when it is closed.
 - `✕` on an open fold's header drops the fold and its finished entries. Running agents stay.
 - Claude can act on the pane by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}` adds notes, `"_move": {"<agent id>": "<drawer>"}` files an entry, and `"_rename": {"<old>": "<new>"}` renames a drawer. Ask in chat ("put that in tweets") and Claude does it.
-- A running entry shows its agent's current step (`⋯ Bash · uv run prof.py`). Every 5 minutes it flashes `◆ 12m · 34 steps · now …` for a minute, so long jobs check in without you asking.
+- A running entry shows its agent's current step (`⋯ Bash · uv run prof.py`). Every 5 minutes it flashes a one-line summary for a minute (`◆ 12m · export down from 193 s to 84 s, testing partial captures`), written by a small model from the agent's last 15 steps, so long jobs check in without you asking.
 - `◉ watch` on a running entry opens that agent's live transcript in the main view.
 - An open entry longer than 15 lines shows `↳ reply` and `✕ remove` at its top as well as its bottom.
 - Running agents show a spinner and their age. New reports show a badge until you open the fold.
@@ -105,6 +105,7 @@ keep_items = 120        # entries kept in total
 open_on_start = true    # open the pane when a session starts
 top_buttons_after = 15  # long entries get reply/remove at the top too
 status_every_minutes = 5  # running entries flash their progress this often; 0 = off
+summaries = true          # a small model writes the flash line
 ```
 
 Changes load on the next session.

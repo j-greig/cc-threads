@@ -13,6 +13,8 @@ export type Item = {
   step?: string
   steps?: number
   bubbleAt?: number
+  trail?: string[]
+  summary?: string
 }
 
 declare module 'claude-code' {
