@@ -246,7 +246,7 @@ export const register: Register = on => {
                 {isOpen && mine.some(x => x.status !== 'running') && <Text> </Text>}
                 {isOpen && mine.some(x => x.status !== 'running') && <Button key={'c:' + name} plain dimColor onPress={() => clear(name)}>clear</Button>}
                 {isOpen && <Text> </Text>}
-                {isOpen && <Button key={'p:' + name} plain color={hue} onPress={() => $.prompt.fill({ text: '/threads ' + name + ' ', mode: 'replace' })}>+ task</Button>}
+                {isOpen && <Button key={'p:' + name} plain onPress={() => $.prompt.fill({ text: '/threads ' + name + ' ', mode: 'replace' })}><Text color={hue}>+ task</Text></Button>}
                 {isOpen && <Text> </Text>}
                 {isOpen && <Button key={'d:' + name} plain dimColor onPress={async () => { await update($, threads, ts => ts.filter(t => t.name !== name)); await update($, items, xs => xs.filter(x => x.thread !== name || x.status === 'running')) }}>✕</Button>}
               </Box>
