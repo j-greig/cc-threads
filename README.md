@@ -100,6 +100,7 @@ suggest_tidy = true     # toast + one-line suggestion to run /threads tidy
 show_per_fold = 6       # entries listed per open drawer
 keep_items = 120        # entries kept in total
 open_on_start = true    # open the pane when a session starts
+top_buttons_after = 15  # long entries get reply/remove at the top too
 ```
 
 Changes load on the next session.

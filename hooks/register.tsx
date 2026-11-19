@@ -53,8 +53,8 @@ let pending = ''
 const addNote = (all: Item[], id: string, note: string) =>
   all.map(x => (x.id === id && !(x.notes || []).includes(note) ? { ...x, notes: [...(x.notes || []), note].slice(-8), seen: false } : x))
 
-type Cfg = { auto_organise: boolean; idle_minutes: number; suggest_tidy: boolean; show_per_fold: number; keep_items: number; open_on_start: boolean }
-const CFG0: Cfg = { auto_organise: true, idle_minutes: 15, suggest_tidy: true, show_per_fold: 6, keep_items: 120, open_on_start: true }
+type Cfg = { auto_organise: boolean; idle_minutes: number; suggest_tidy: boolean; show_per_fold: number; keep_items: number; open_on_start: boolean; top_buttons_after: number }
+const CFG0: Cfg = { auto_organise: true, idle_minutes: 15, suggest_tidy: true, show_per_fold: 6, keep_items: 120, open_on_start: true, top_buttons_after: 15 }
 let cfg: Cfg = { ...CFG0 }
 // threads.toml: flat "key = value" lines; # comments; unknown keys ignored.
 function parseToml(txt: string): Partial<Cfg> {
@@ -330,6 +330,15 @@ export const register: Register = on => {
               </Box>
               {isOpen && mine.slice(-cfg.show_per_fold).reverse().map(x => {
                 const big = opened === x.id
+                const body = x.full || x.report || 'still running'
+                const rows = body.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 44)), 0)
+                const acts = (at: string) => (
+                  <Box flexDirection="row">
+                    <Button key={'a' + at + ':' + x.id} plain dimColor onPress={() => $.prompt.fill({ text: '⟜ threads › ' + x.thread + ' › "' + x.title + '" (agent ' + x.id + ')\n', mode: 'insert' })}>{x.status === 'running' ? '↳ message' : '↳ reply'}</Button>
+                    <Text>   </Text>
+                    <Button key={'x' + at + ':' + x.id} plain dimColor onPress={async () => { await update($, items, xs => xs.filter(y => y.id !== x.id)); await update($, open1, () => '') }}>✕ remove</Button>
+                  </Box>
+                )
                 const mark = x.status === 'running' ? spin : x.status === 'failed' ? '✗' : '✓'
                 return (
                   <Box flexDirection="column" key={x.id} paddingLeft={2} borderStyle={big ? 'single' : undefined} borderColor={hue}>
@@ -341,16 +350,11 @@ export const register: Register = on => {
                       <Text dimColor>{'  ' + (x.status === 'running' ? ago(x.started) : hhmm(x.ended || x.started))}</Text>
                     </Box>
                     {!big && x.report && <Text dimColor wrap="truncate-end">{'  ' + x.report}</Text>}
-                    {big && <Text wrap="wrap">{x.full || x.report || 'still running'}</Text>}
+                    {big && rows > cfg.top_buttons_after && acts('t')}
+                    {big && <Text wrap="wrap">{body}</Text>}
                     {big && (x.notes || []).map((n, k) => <Text key={'n' + k} color={n.startsWith('you:') ? undefined : hue} wrap="wrap">{'⟜ ' + n}</Text>)}
                     {!big && (x.notes || []).length > 0 && <Text dimColor wrap="truncate-end">{'  ⟜ ' + (x.notes || [])[(x.notes || []).length - 1]}</Text>}
-                    {big && (
-                      <Box flexDirection="row">
-                        <Button key={'a:' + x.id} plain dimColor onPress={() => $.prompt.fill({ text: '⟜ threads › ' + x.thread + ' › "' + x.title + '" (agent ' + x.id + ')\n', mode: 'insert' })}>{x.status === 'running' ? '↳ message' : '↳ reply'}</Button>
-                        <Text>   </Text>
-                        <Button key={'x:' + x.id} plain dimColor onPress={async () => { await update($, items, xs => xs.filter(y => y.id !== x.id)); await update($, open1, () => '') }}>✕ remove</Button>
-                      </Box>
-                    )}
+                    {big && acts('b')}
                   </Box>
                 )
               })}
