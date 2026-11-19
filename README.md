@@ -1,7 +1,6 @@
 ![threads pane beside a Claude Code session](docs/screenshot.png)
 
-# threads
-
+# threads /ᐠ｡ﻌ｡ᐟ\
 **a chest of drawers for your Claude Code agents.**
 
 You send five agents out. Five reports come back and pile up in one long scroll, and the one you wanted is somewhere under a diff. threads gives each piece of work its own drawer in a sidebar. Agents get filed on the way out. Their reports land in the right drawer on the way back, with a little spinner while they're still out there.
