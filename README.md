@@ -1,3 +1,5 @@
+![threads pane beside a Claude Code session](docs/screenshot.png)
+
 # threads ༼つ◕‿◕‿⚆༽つ ༼つ⚆‿◕‿◕༽つ /ᐠ｡ﻌ｡ᐟ\
 
 **a chest of drawers for your Claude Code agents.**
@@ -31,8 +33,6 @@ Open a drawer and it looks like this:
 1-9 fold · click a line to read it · /threads add name
 ```
 
-
-![threads pane beside a Claude Code session](docs/screenshot.png)
 
 ![threads demo](docs/demo.gif)
 
