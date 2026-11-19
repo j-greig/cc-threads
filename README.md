@@ -48,6 +48,19 @@ The pane docks on the right only in Claude Code's fullscreen layout, in a wide w
 
 Narrow terminals get the drawers stacked above the prompt, which works but is sad. Mouse clicks reach the pane only in fullscreen. From the keyboard: ctrl+x then tab to focus it, 1-9 to open and close folds, Esc to go back.
 
+## Commands ⌘
+
+```
+/threads <name> <task>         send an agent into a drawer (made if new)
+/threads add <name> [keywords] add a drawer; agents whose task mentions a keyword land in it
+/threads rename <old> <new>    rename a drawer, entries kept
+/threads drop <name>           remove a drawer
+/threads tidy                  remove drawers quiet for idle_minutes
+/threads config                show the settings file and values
+/threads                       open the pane
+```
+`/thread` works the same.
+
 ## Things you can do ✕ ↳ ⟜
 
 - Each agent is filed by words in its description or prompt. Put `[name]` in an agent's description to choose its fold; a new name makes a new fold.
