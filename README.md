@@ -1,4 +1,4 @@
-# threads ༼つ◕‿◕‿⚆༽つ ༼つ⚆‿◕‿◕༽つ
+# threads ༼つ◕‿◕‿⚆༽つ ༼つ⚆‿◕‿◕༽つ /ᐠ｡ﻌ｡ᐟ\
 
 **a chest of drawers for your Claude Code agents.**
 
