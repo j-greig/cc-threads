@@ -31,6 +31,9 @@ Open a drawer and it looks like this:
 1-9 fold · click a line to read it · /threads add name
 ```
 
+
+![threads pane beside a Claude Code session](docs/screenshot.png)
+
 ## Install ✦
 
 ```
