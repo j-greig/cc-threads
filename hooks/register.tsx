@@ -140,7 +140,9 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'threads' }, async ($, e) => {
-    const [verb, name, ws] = e.args.trim().split(/\s+/)
+    const raw = e.args.trim().split(/\s+/)
+    // "<old> -> <new>" is shorthand for "rename <old> <new>".
+    const [verb, name, ws] = raw[1] === '->' && raw[0] && raw[2] ? ['rename', raw[0], raw[2]] : raw
     if (verb === 'add' && name) {
       const words = (ws || name).split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
       await update($, threads, list => [...list.filter(t => t.name !== name), { name, words, isOpen: true }])
@@ -188,7 +190,9 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'thread' }, async ($, e) => {
-    const [verb, name, ws] = e.args.trim().split(/\s+/)
+    const raw = e.args.trim().split(/\s+/)
+    // "<old> -> <new>" is shorthand for "rename <old> <new>".
+    const [verb, name, ws] = raw[1] === '->' && raw[0] && raw[2] ? ['rename', raw[0], raw[2]] : raw
     if (verb === 'add' && name) {
       const words = (ws || name).split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
       await update($, threads, list => [...list.filter(t => t.name !== name), { name, words, isOpen: true }])

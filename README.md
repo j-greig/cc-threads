@@ -59,6 +59,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 /threads <name> <task>         send an agent into a drawer (made if new)
 /threads add <name> [keywords] add a drawer; agents whose task mentions a keyword land in it
 /threads rename <old> <new>    rename a drawer, entries kept
+/threads <old> -> <new>        same, shorter
 /threads drop <name>           remove a drawer
 /threads log <name> <title>    file work done in chat as a finished entry
 /threads tidy                  remove drawers quiet for idle_minutes
