@@ -70,7 +70,7 @@ export const register: Register = on => {
       await $.store.set('threads', t)
       await $.store.set('items', i)
     })
-    await $.command.register({ name: 'threads', description: 'Open the pane  |  /threads add <name> [word,word]  |  /threads drop <name>' })
+    await $.command.register({ name: 'threads', description: 'Open the pane  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads drop <name>' })
     await $.command.register({
       name: 'thread',
       description: 'Add or change a thread: /thread <name> word1,word2  |  /thread drop <name>',
@@ -107,7 +107,7 @@ export const register: Register = on => {
       await update($, threads, list => list.filter(t => t.name !== name))
       return { text: 'Dropped thread ' + name + '.' }
     }
-    if (verb && verb !== 'open') return { text: 'Usage: /threads  |  /threads add <name> [word,word]  |  /threads drop <name>' }
+    if (verb && verb !== 'open') return { text: 'Usage: /threads  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads drop <name>' }
     await $.ui.open({ id: PANE, title: 'Threads' })
     return { text: 'Threads pane opened.' }
   })
