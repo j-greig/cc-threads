@@ -3,10 +3,15 @@
 A Claude Code mod. Background agents report into folds beside the chat, one fold per piece of work, instead of piling into the main scroll.
 
 ```
-[▾] build     ⠹ 1 running  2 new  clear
+[▾] build     ⠹ 1 running  2 new  clear ✕
   ⠹ wire the export button     42s
-  ✓ fix the sidebar toggle     10:29
-    Sidebars collapse with { } and \, state kept per film…
+  ┌ ✓ fix the sidebar toggle     10:29
+  │ Sidebars collapse with { } and \, state kept per film,
+  │ and the toggle reads the saved state on load.
+  │ ⟜ you: does it work in fullscreen?
+  │ ⟜ yes, checked in both layouts
+  │ ↳ reply   ✕ remove
+  └
 [▸] research  3 entries
 [▸] review    empty
 
@@ -34,11 +39,15 @@ Mouse clicks reach the pane only in fullscreen. From the keyboard: ctrl+x then t
 
 - Each agent is filed by words in its description or prompt. Put `[name]` in an agent's description to choose its fold; a new name makes a new fold.
 - `/thread music song,stems,mix` adds a fold with its match words. `/thread drop music` removes it. `/threads` reopens the pane.
-- Click a line to read the full report. `↳ reply` starts your prompt with a marker line, `⟜ threads › build › "title" (agent id)`, so the reply says which entry it answers and Claude can look up that agent. `✕ remove` drops the entry.
-- `✕` on an open fold's header removes the fold and its finished entries.
-- Running agents show a spinner and their age. New reports show a badge until you open the fold.- A prompt that starts with the `⟜` line is filed under that entry as a note, and so is the answer to it. Notes show as `⟜` lines in the entry.
+- Click a line to open the entry and read the full report. Click again to close it.
+- An open entry ends with one row: `↳ reply` (finished entries) or `↳ message` (running ones), then `✕ remove`. `✕ remove` drops that entry.
+- `↳ reply` and `↳ message` fill your prompt with a marker line: `⟜ threads › build › "title" (agent id)`. Type under it. The line says which entry the prompt is about, so Claude can look up that agent.
+- A prompt that starts with the `⟜` line is filed as a `⟜` note on that entry, and so is Claude's answer. Notes show under the report when the entry is open, and the latest one shows when it is closed.
+- `✕` on an open fold's header drops the fold and its finished entries. Running agents stay.
 - Claude can add notes itself by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}`.
-- Folds and reports are kept across sessions.
+- Running agents show a spinner and their age. New reports show a badge until you open the fold.
+- Folds, reports and notes are kept across sessions.
+- The mod adds nothing to the status line.
 
 ## Who made it
 
