@@ -181,7 +181,7 @@ export const register: Register = on => {
       if (!task) return { text: 'Give a task after the name: /threads ' + verb + ' what to do' }
       await update($, threads, list => list.some(t => t.name === verb) ? list : [...list, { name: verb, words: [verb], isOpen: true }])
       await $.ui.open({ id: PANE, title: 'Threads' })
-      void $.prompt.submit({ asUser: true, text: '⟜ threads › ' + verb + ' › new task\nStart one background agent (run_in_background) with the description "[' + verb + '] ' + task.slice(0, 50).replace(/"/g, "'") + '" and this task as its prompt, then reply in one line:\n' + task })
+      void $.prompt.submit({ asUser: true, text: '⟜ threads › ' + verb + ' › new task\nStart one background agent (run_in_background) with a description that starts "[' + verb + '] " followed by a 3-6 word summary of the task, and this task as its prompt (add any context you know), then reply in one line:\n' + task })
       return { text: 'Sending a ' + verb + ' agent: ' + task.slice(0, 80) }
     }
     if (verb && verb !== 'open') return { text: 'Usage: /threads <name> <task>  |  /threads  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' }
@@ -216,7 +216,7 @@ export const register: Register = on => {
       if (!task) return { text: 'Give a task after the name: /threads ' + verb + ' what to do' }
       await update($, threads, list => list.some(t => t.name === verb) ? list : [...list, { name: verb, words: [verb], isOpen: true }])
       await $.ui.open({ id: PANE, title: 'Threads' })
-      void $.prompt.submit({ asUser: true, text: '⟜ threads › ' + verb + ' › new task\nStart one background agent (run_in_background) with the description "[' + verb + '] ' + task.slice(0, 50).replace(/"/g, "'") + '" and this task as its prompt, then reply in one line:\n' + task })
+      void $.prompt.submit({ asUser: true, text: '⟜ threads › ' + verb + ' › new task\nStart one background agent (run_in_background) with a description that starts "[' + verb + '] " followed by a 3-6 word summary of the task, and this task as its prompt (add any context you know), then reply in one line:\n' + task })
       return { text: 'Sending a ' + verb + ' agent: ' + task.slice(0, 80) }
     }
     if (verb && verb !== 'open') return { text: 'Usage: /threads <name> <task>  |  /threads  |  /threads add <name> [keywords, comma-separated: agents whose task mentions one land here]  |  /threads rename <old> <new>  |  /threads drop <name>' }
