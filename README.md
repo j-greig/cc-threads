@@ -32,9 +32,9 @@ Open a drawer and it looks like this:
 ```
 
 
-![threads demo](docs/demo.gif)
-
 ![threads pane beside a Claude Code session](docs/screenshot.png)
+
+![threads demo](docs/demo.gif)
 
 ## Install ✦
 
