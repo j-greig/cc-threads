@@ -171,7 +171,7 @@ export const register: Register = on => {
     if (verb === 'config') return { text: 'Config file: ' + $.plugin.root + '/threads.toml\n' + Object.entries(cfg).map(([k, v]) => k + ' = ' + v).join('\n') }
     if (verb === 'rename' && name && ws) {
       await update($, threads, list => list.some(t => t.name === name)
-        ? list.filter(t => t.name !== ws).map(t => (t.name === name ? { ...t, name: ws } : t))
+        ? list.filter(t => t.name !== ws).map(t => (t.name === name ? { ...t, name: ws, words: [ws] } : t))
         : [...list.filter(t => t.name !== ws), { name: ws, words: [ws], isOpen: true }])
       await update($, items, xs => xs.map(x => (x.thread === name ? { ...x, thread: ws } : x)))
       return { text: 'Renamed thread ' + name + ' to ' + ws + '.' }
@@ -206,7 +206,7 @@ export const register: Register = on => {
     }
     if (verb === 'rename' && name && ws) {
       await update($, threads, list => list.some(t => t.name === name)
-        ? list.filter(t => t.name !== ws).map(t => (t.name === name ? { ...t, name: ws } : t))
+        ? list.filter(t => t.name !== ws).map(t => (t.name === name ? { ...t, name: ws, words: [ws] } : t))
         : [...list.filter(t => t.name !== ws), { name: ws, words: [ws], isOpen: true }])
       await update($, items, xs => xs.map(x => (x.thread === name ? { ...x, thread: ws } : x)))
       return { text: 'Renamed thread ' + name + ' to ' + ws + '.' }
