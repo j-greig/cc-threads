@@ -36,8 +36,7 @@ Mouse clicks reach the pane only in fullscreen. From the keyboard: ctrl+x then t
 - `/thread music song,stems,mix` adds a fold with its match words. `/thread drop music` removes it. `/threads` reopens the pane.
 - Click a line to read the full report. `↳ reply` starts your prompt with a marker line, `⟜ threads › build › "title" (agent id)`, so the reply says which entry it answers and Claude can look up that agent. `✕ remove` drops the entry.
 - `✕` on an open fold's header removes the fold and its finished entries.
-- Running agents show a spinner and their age. New reports show a badge until you open the fold. The status line shows the totals.
-- A prompt that starts with the `⟜` line is filed under that entry as a note, and so is the answer to it. Notes show as `⟜` lines in the entry.
+- Running agents show a spinner and their age. New reports show a badge until you open the fold.- A prompt that starts with the `⟜` line is filed under that entry as a note, and so is the answer to it. Notes show as `⟜` lines in the entry.
 - Claude can add notes itself by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}`.
 - Folds and reports are kept across sessions.
 

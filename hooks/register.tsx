@@ -80,7 +80,8 @@ export const register: Register = on => {
       const run = xs.filter(x => x.status === 'running')
       const fresh = xs.filter(x => x.status !== 'running' && !x.seen).length
       if (run.length) await update($, tick, n => n + 1)
-      $.ui.status(run.length || fresh ? 'threads ' + (run.length ? run.length + ' running ' : '') + (fresh ? fresh + ' new' : '') : undefined)
+      void fresh
+      $.ui.status(undefined)
     })
     // Optional notes file: {"<item id>": ["note", ...]}; lets the main session annotate entries.
     $.clock.every(3000, async () => {
