@@ -179,6 +179,8 @@ export const register: Register = on => {
                 {!running && !fresh && <Text dimColor>{mine.length ? mine.length + (mine.length === 1 ? ' entry' : ' entries') : 'empty'}</Text>}
                 {isOpen && mine.some(x => x.status !== 'running') && <Text> </Text>}
                 {isOpen && mine.some(x => x.status !== 'running') && <Button key={'c:' + name} plain dimColor onPress={() => clear(name)}>clear</Button>}
+                {isOpen && <Text> </Text>}
+                {isOpen && <Button key={'d:' + name} plain dimColor onPress={async () => { await update($, threads, ts => ts.filter(t => t.name !== name)); await update($, items, xs => xs.filter(x => x.thread !== name || x.status === 'running')) }}>✕</Button>}
               </Box>
               {isOpen && mine.slice(-6).reverse().map(x => {
                 const big = opened === x.id
@@ -194,6 +196,9 @@ export const register: Register = on => {
                     </Box>
                     {!big && x.report && <Text dimColor wrap="truncate-end">{'  ' + x.report}</Text>}
                     {big && <Text wrap="wrap">{x.full || x.report || 'still running'}</Text>}
+                    {big && (
+                      <Button key={'x:' + x.id} plain dimColor onPress={async () => { await update($, items, xs => xs.filter(y => y.id !== x.id)); await update($, open1, () => '') }}>✕ remove</Button>
+                    )}
                     {big && x.status !== 'running' && (
                       <Button key={'a:' + x.id} plain dimColor onPress={() => $.prompt.fill({ text: 'about "' + x.title + '": ', mode: 'insert' })}>↳ reply about this</Button>
                     )}
