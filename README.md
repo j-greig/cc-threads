@@ -77,7 +77,8 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 - `↳ reply` and `↳ message` fill your prompt with a marker line: `⟜ threads › build › "title" (agent id)`. Type under it. The line says which entry the prompt is about, so Claude can look up that agent.
 - A prompt that starts with the `⟜` line is filed as a `⟜` note on that entry, and so is Claude's answer. Notes show under the report when the entry is open, and the latest one shows when it is closed.
 - `✕` on an open fold's header drops the fold and its finished entries. Running agents stay.
-- Claude can add notes itself by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}`.
+- Claude can act on the pane by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}` adds notes, `"_move": {"<agent id>": "<drawer>"}` files an entry, and `"_rename": {"<old>": "<new>"}` renames a drawer. Ask in chat ("put that in tweets") and Claude does it.
+- An open entry longer than 15 lines shows `↳ reply` and `✕ remove` at its top as well as its bottom.
 - Running agents show a spinner and their age. New reports show a badge until you open the fold.
 - Folds, reports and notes are kept across sessions.
 - The mod adds nothing to the status line. Your status line is yours.
@@ -85,8 +86,8 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 
 ## Claude keeps it tidy ✧
 
-- **Auto-organise (on by default).** Claude sees your drawers and tags each agent it starts with one, reusing a drawer when the work fits and inventing a short name when nothing does.
-- **Offers to file chat work.** When I do a job myself that belongs in a drawer, I end with one line offering `/threads log <drawer> <title>`.
+- **Auto-organise (on by default).** Claude sees your drawers and tags each agent it starts with one, reusing a drawer when the work fits and inventing a short name when nothing does. A new `[tag]` makes its drawer.
+- **Offers to file chat work.** When Claude does a job itself that belongs in a drawer, it ends with one line offering `/threads log <drawer> <title>`.
 - **Tidy suggestions.** A drawer with no running agent and no news for 15 minutes counts as quiet. You get a toast, and Claude suggests `/threads tidy` once in chat. `/threads tidy` removes the quiet drawers.
 
 ## Settings ⚙
