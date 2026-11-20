@@ -31,6 +31,7 @@ function pick(list: Thread[], desc: string, prompt: string): string {
 }
 
 const HUES = ['#e0a050', '#5fafd7', '#87d787', '#d787d7', '#d7d75f', '#5fd7af']
+const HINT = '1-9 fold · click a line to read it · /threads add name'
 const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 function ago(ms: number): string {
   const s = Math.max(0, Math.round((Date.now() - ms) / 1000))
@@ -408,7 +409,12 @@ export const register: Register = on => {
           )
         })}
         <Box flexGrow={1} />
-        <Text dimColor>1-9 fold · click a line to read it · /threads add name</Text>
+        {docked ? <Text> </Text> : <Text dimColor>{HINT}</Text>}
+        {docked && (
+          <Box position="absolute" top={(e.props.scroll?.offset || 0) + e.props.scroll.bodyRows - 1} left={0} width="100%">
+            <Text dimColor>{HINT}</Text>
+          </Box>
+        )}
       </Box>
     )
   })
