@@ -42,6 +42,15 @@ function hhmm(ms: number): string {
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
 }
 
+const URL_RE = /https?:\/\/[^\s<>()\[\]"'`]+[^\s<>()\[\]"'`.,;:!?]/g
+
+// Keep the first 4000 characters, plus every URL the cut would drop, on a last line.
+function keepFull(answer: string): string {
+  const head = answer.slice(0, 4000)
+  const lost = [...new Set(answer.slice(4000).match(URL_RE) || [])].filter(u => !head.includes(u))
+  return lost.length ? head + '\n…\nlinks: ' + lost.join(' ') : head
+}
+
 function gist(answer: string): string {
   const lines = answer.split('\n').map(s => s.replace(/[*#>`]/g, '').trim()).filter(Boolean)
   return lines.slice(0, 3).join(' ').slice(0, 300)
@@ -299,14 +308,15 @@ export const register: Register = on => {
     if (!hit) return r
     await update($, items, list => list.map(x => x.id === e.agentId ? {
       ...x, status: e.reason === 'answer' ? 'done' : 'failed', ended: Date.now(),
-      report: gist(e.answer || ''), full: (e.answer || '').slice(0, 4000), seen: false,
+      report: gist(e.answer || ''), full: keepFull(e.answer || ''), seen: false,
     } : x))
     $.ui.toast(hit.thread + ': ' + hit.title + ' reported')
     return r
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const { Box, Text, Button, Link } = $.ui.resolve(e)
+    const linkify = (t: string) => t.split(/(https?:\/\/[^\s<>()\[\]"'`]+[^\s<>()\[\]"'`.,;:!?])/).map((part, k) => k % 2 ? <Link key={'u' + k} href={part}>{part}</Link> : part)
     const dismissed = await read($, hintOff)
     const docked = e.props.placement === 'dock' && e.viewport?.isFullscreen !== false
     const narrow = (e.props.bodyColumns ?? 80) < 34
@@ -325,7 +335,7 @@ export const register: Register = on => {
     }
     const clear = (name: string) => update($, items, xs => xs.filter(x => x.thread !== name || x.status === 'running'))
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" minHeight={e.props.placement === 'dock' ? e.props.scroll.bodyRows : undefined}>
         {!dismissed && (!docked || narrow) && (
           <Box flexDirection="column" borderStyle="round" borderColor="#d7d75f" paddingX={1} marginBottom={1}>
             <Text bold>Threads works best as a right sidebar</Text>
@@ -387,7 +397,7 @@ export const register: Register = on => {
                       : <Text dimColor wrap="truncate-end">{'  ⋯ ' + (x.summary ? x.summary + ' · ' : '') + x.step}</Text>)}
                     {!big && x.report && <Text dimColor wrap="truncate-end">{'  ' + x.report}</Text>}
                     {big && rows > cfg.top_buttons_after && acts('t')}
-                    {big && <Text wrap="wrap">{body}</Text>}
+                    {big && <Text wrap="wrap">{linkify(body)}</Text>}
                     {big && (x.notes || []).map((n, k) => <Text key={'n' + k} color={n.startsWith('you:') ? undefined : hue} wrap="wrap">{'⟜ ' + n}</Text>)}
                     {!big && (x.notes || []).length > 0 && <Text dimColor wrap="truncate-end">{'  ⟜ ' + (x.notes || [])[(x.notes || []).length - 1]}</Text>}
                     {big && acts('b')}
@@ -397,6 +407,7 @@ export const register: Register = on => {
             </Box>
           )
         })}
+        <Box flexGrow={1} />
         <Text dimColor>1-9 fold · click a line to read it · /threads add name</Text>
       </Box>
     )
