@@ -77,7 +77,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 - `↳ reply` and `↳ message` fill your prompt with a marker line: `⟜ threads › build › "title" (agent id)`. Type under it. The line says which entry the prompt is about, so Claude can look up that agent.
 - A prompt that starts with the `⟜` line is filed as a `⟜` note on that entry, and so is Claude's answer. Notes show under the report when the entry is open, and the latest one shows when it is closed.
 - `✕` on an open fold's header drops the fold and its finished entries. Running agents stay.
-- Claude can act on the pane by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}` adds notes, `"_move": {"<agent id>": "<drawer>"}` files an entry, and `"_rename": {"<old>": "<new>"}` renames a drawer. Ask in chat ("put that in tweets") and Claude does it.
+- Claude can act on the pane by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}` adds notes, `"_move": {"<agent id>": "<drawer>"}` files an entry, `"_rename": {"<old>": "<new>"}` renames a drawer, and `"_log": [{"drawer": "<name>", "title": "<title>"}]` files chat work as a done entry (one entry per drawer and title). Ask in chat ("put that in tweets") and Claude does it.
 - A running entry shows its agent's current step (`⋯ Bash · uv run prof.py`). Every 5 minutes it flashes a one-line summary for a minute (`◆ 12m · export down from 193 s to 84 s, testing partial captures`), written by a small model from the agent's last 15 steps, so long jobs check in without you asking.
 - `◉ watch` on a running entry opens that agent's live transcript in the main view.
 - An open entry longer than 15 lines shows `↳ reply` and `✕ remove` at its top as well as its bottom.
@@ -89,7 +89,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 ## Claude keeps it tidy ✧
 
 - **Auto-organise (on by default).** Claude sees your drawers and tags each agent it starts with one, reusing a drawer when the work fits and inventing a short name when nothing does. A new `[tag]` makes its drawer.
-- **Offers to file chat work.** When Claude does a job itself that belongs in a drawer, it ends with one line offering `/threads log <drawer> <title>`.
+- **Files chat work.** When Claude does a job itself that belongs in a drawer, it files it (through `"_log"` in `inbox.json`) and ends with one line saying where. It offers `/threads log <drawer> <title>` only when no drawer fits or two fit equally.
 - **Tidy suggestions.** A drawer with no running agent and no news for 15 minutes counts as quiet. You get a toast, and Claude suggests `/threads tidy` once in chat. `/threads tidy` removes the quiet drawers.
 
 ## Settings ⚙

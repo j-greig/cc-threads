@@ -137,6 +137,17 @@ export const register: Register = on => {
         await update($, items, all => all.map(x => x.thread === from ? { ...x, thread: to } : x))
       }
       delete m._rename
+      // "_log": [{"drawer": "<name>", "title": "<what was done>"}] files chat work as a done entry; the drawer is made if missing.
+      const lg = (Array.isArray(m._log) ? m._log : []) as { drawer?: string, title?: string }[]
+      for (const L of lg) {
+        if (!L || !L.drawer || !L.title) continue
+        const id = 'log-' + L.drawer + '-' + L.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)
+        if ((await read($, items)).some(x => x.id === id)) continue
+        if (!(await read($, threads)).some(t => t.name === L.drawer)) await update($, threads, l => [...l, { name: L.drawer!, words: [L.drawer!], isOpen: true }])
+        const now = Date.now()
+        await update($, items, xs => [...xs, { id, thread: L.drawer!, title: L.title!, status: 'done' as const, started: now, ended: now, report: 'done in chat', seen: false }].slice(-cfg.keep_items))
+      }
+      delete m._log
       for (const [id, ns] of Object.entries(m as Record<string, string[]>)) for (const n of ns) await update($, items, all => addNote(all, id, n))
     })
     // Status bubbles: every status_every_minutes, a long-running entry flashes its progress for a minute.
@@ -255,7 +266,7 @@ export const register: Register = on => {
     const list = await read($, threads)
     const parts: string[] = []
     if (cfg.auto_organise) parts.push('Threads mod: when you start a background agent, begin its description with a [drawer] tag. Drawers now: ' + list.map(t => t.name).join(', ') + '. Reuse the drawer the work belongs to; if none fits, invent a short lowercase-hyphen name. Keep related tasks in one drawer.')
-    if (cfg.auto_organise) parts.push('Threads mod: when you finish work yourself (no agent) that clearly belongs to an existing drawer, and filing it would make the drawer history clearer, end your reply with one line: "file in <drawer>? /threads log <drawer> <short title>". Skip it for small talk or when no drawer fits.')
+    if (cfg.auto_organise) parts.push('Threads mod: when you finish work yourself (no agent) that belongs to a drawer (the person named it, a /thread or /threads command this session pointed at it, or the work plainly matches one), file it yourself: add {"drawer": "<drawer>", "title": "<short title>"} to the "_log" array in ' + $.plugin.root + '/inbox.json (create the file if missing, keep its other keys), then end your reply with one line: "filed in <drawer>: <title>". Use the same title again for later rounds of the same job, so it stays one entry. Only if no drawer fits or two fit equally, offer "/threads log <drawer> <short title>" instead. Skip small talk.')
     const q = cfg.suggest_tidy ? quietOnes(list, await read($, items)) : []
     if (q.length) parts.push('Threads mod: these drawers have been quiet for ' + cfg.idle_minutes + '+ minutes: ' + q.join(', ') + '. At the end of your next reply, suggest once in one line that the person run /threads tidy.')
     if (!parts.length) return r
