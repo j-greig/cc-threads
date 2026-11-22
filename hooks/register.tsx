@@ -452,7 +452,10 @@ export const register: Register = on => {
                 {isOpen && <Text> </Text>}
                 {isOpen && <Button key={'e:' + name} plain dimColor onPress={() => update($, renaming, c => c === name ? '' : name)}>✎</Button>}
                 {isOpen && <Text> </Text>}
-                {isOpen && <Button key={'d:' + name} plain dimColor onPress={async () => { await update($, threads, ts => ts.filter(t => t.name !== name)); await update($, items, xs => xs.filter(x => x.thread !== name || x.status === 'running')) }}>✕</Button>}
+                {isOpen && <Button key={'d:' + name} plain dimColor={ren !== '✕' + name} onPress={async () => {
+                  if (ren !== '✕' + name) { await update($, renaming, () => '✕' + name); return }
+                  await update($, renaming, () => '')
+                  await update($, threads, ts => ts.filter(t => t.name !== name)); await update($, items, xs => xs.filter(x => x.thread !== name || x.status === 'running')) }}>{ren === '✕' + name ? <Text color="red">✕ delete drawer?</Text> : '✕'}</Button>}
               </Box>
               {isOpen && mine.slice(-cfg.show_per_fold).reverse().map(x => {
                 const big = opened === x.id
