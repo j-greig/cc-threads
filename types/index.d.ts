@@ -19,6 +19,6 @@ export type Item = {
 
 declare module 'claude-code' {
   interface PluginState {
-    threads: { threads: Shaped<Thread[]>; items: Shaped<Item[]>; open1: Shaped<string>; tick: Shaped<number>; hintOff: Shaped<boolean> }
+    threads: { threads: Shaped<Thread[]>; items: Shaped<Item[]>; open1: Shaped<string>; tick: Shaped<number>; hintOff: Shaped<boolean>; adding: Shaped<boolean> }
   }
 }

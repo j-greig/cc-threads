@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { Item, Thread } from '../types'
 
@@ -12,6 +12,7 @@ const threads = atom({ plugin: 'threads', key: 'threads' } as const, [], { shape
 const items = atom({ plugin: 'threads', key: 'items' } as const, [], { shape: 'items-1' })
 const open1 = atom({ plugin: 'threads', key: 'open1' } as const, '', { shape: 'open1-1' })
 const hintOff = atom({ plugin: 'threads', key: 'hintOff' } as const, false, { shape: 'hintOff-1' })
+const adding = atom({ plugin: 'threads', key: 'adding' } as const, false, { shape: 'adding-1' })
 const tick = atom({ plugin: 'threads', key: 'tick' } as const, 0, { shape: 'tick-1' })
 
 const DEFAULTS: Thread[] = [
@@ -63,8 +64,8 @@ let pending = ''
 const addNote = (all: Item[], id: string, note: string) =>
   all.map(x => (x.id === id && !(x.notes || []).includes(note) ? { ...x, notes: [...(x.notes || []), note].slice(-8), seen: false } : x))
 
-type Cfg = { auto_organise: boolean; idle_minutes: number; suggest_tidy: boolean; show_per_fold: number; keep_items: number; open_on_start: boolean; top_buttons_after: number; status_every_minutes: number; summaries: boolean }
-const CFG0: Cfg = { auto_organise: true, idle_minutes: 15, suggest_tidy: true, show_per_fold: 6, keep_items: 120, open_on_start: true, top_buttons_after: 15, status_every_minutes: 5, summaries: true }
+type Cfg = { auto_organise: boolean; idle_minutes: number; suggest_tidy: boolean; show_per_fold: number; keep_items: number; open_on_start: boolean; top_buttons_after: number; status_every_minutes: number; summaries: boolean; auto_file: boolean }
+const CFG0: Cfg = { auto_organise: true, idle_minutes: 15, suggest_tidy: true, show_per_fold: 6, keep_items: 120, open_on_start: true, top_buttons_after: 15, status_every_minutes: 5, summaries: true, auto_file: true }
 let cfg: Cfg = { ...CFG0 }
 // threads.toml: flat "key = value" lines; # comments; unknown keys ignored.
 function parseToml(txt: string): Partial<Cfg> {
@@ -85,6 +86,37 @@ const quietOnes = (list: Thread[], all: Item[]) => list.map(t => t.name).filter(
   const last = Math.max(...mine.map(x => x.ended || x.started))
   return Date.now() - last > cfg.idle_minutes * 60000
 })
+
+let lastAsk = ''
+// Auto-filer: after each main-session turn, haiku reads the request and the answer's start and files the turn
+// into a drawer (or a new one for a clearly new ongoing project), adding up to 3 keywords to that drawer.
+function autoFile($: EngineInterface, answer: string) {
+  if (!cfg.auto_file || lastAsk.trim().length < 12) return
+  const ask = lastAsk; lastAsk = ''
+  void (async () => {
+    try {
+      const ts = await read($, threads)
+      const xs = await read($, items)
+      const list = ts.map(t => '- ' + t.name + ' (' + t.words.join(', ') + '): ' + xs.filter(x => x.thread === t.name).slice(-3).map(x => x.title).join(' | ')).join('\n')
+      const res = await $.model.complete({ model: 'haiku', maxTokens: 120, prompt: 'Drawers (name (keywords): recent entries):\n' + list +
+        '\n\nUser asked:\n' + ask.slice(0, 1500) + '\n\nAssistant answered (start):\n' + answer.slice(0, 1200) +
+        '\n\nFile this turn. Reply with JSON only: {"drawer":"<existing name>","title":"<3-7 word title of the work done>","words":["<up to 3 distinctive keywords>"]} if it plainly matches a drawer; {"drawer":"<new short lowercase name>","new":true,"title":"...","words":[...]} only if it is real work on a clearly new ongoing project; {"drawer":null} for small talk, questions with no work, or doubt.' })
+      if (!res.isAnswered) return
+      const j = JSON.parse((res.text.match(/\{[\s\S]*\}/) || ['{}'])[0]) as { drawer?: string | null, new?: boolean, title?: string, words?: string[] }
+      if (!j.drawer || !j.title) return
+      const name = j.drawer.trim().toLowerCase().slice(0, 24), exists = ts.some(t => t.name === name)
+      if (!exists && !j.new) return
+      const words = (j.words || []).map(w => String(w).toLowerCase().trim()).filter(w => w && w.length < 30).slice(0, 3)
+      if (!exists) await update($, threads, l => [...l, { name, words: [name, ...words], isOpen: true }])
+      else await update($, threads, l => l.map(t => t.name === name ? { ...t, words: [...new Set([...t.words, ...words])].slice(0, 12) } : t))
+      const id = 'log-' + name + '-' + j.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)
+      if ((await read($, items)).some(x => x.id === id)) return
+      const now = Date.now()
+      await update($, items, ys => [...ys, { id, thread: name, title: j.title!, status: 'done' as const, started: now, ended: now, report: 'auto-filed from chat', seen: false }].slice(-cfg.keep_items))
+      $.ui.toast('threads: ' + (exists ? '' : 'new drawer · ') + name + ' ← ' + j.title)
+    } catch { /* filing is best effort */ }
+  })()
+}
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -289,6 +321,7 @@ export const register: Register = on => {
     return next(e)
   })
 
+  on('prompt.submit', async ($, e, next) => { const t = (e as { text?: string }).text || ''; if (!t.startsWith('⟜')) lastAsk = t; return next(e) })
   on('agent.spawn', async ($, e, next) => {
     const r = await next(e)
     const id = ('agentId' in r && r.agentId) || e.tool_use_id
@@ -308,6 +341,7 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
     if (!e.agentId) {
+      if (e.reason === 'answer') autoFile($, e.answer || '')
       if (pending && e.reason === 'answer') {
         const id = pending
         pending = ''
@@ -327,7 +361,8 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Link } = $.ui.resolve(e)
+    const { Box, Text, Button, Link, Input } = $.ui.resolve(e)
+    const isAdding = await read($, adding)
     const linkify = (t: string) => t.split(/(https?:\/\/[^\s<>()\[\]"'`]+[^\s<>()\[\]"'`.,;:!?])/).map((part, k) => k % 2 ? <Link key={'u' + k} href={part}>{part}</Link> : part)
     const dismissed = await read($, hintOff)
     const docked = e.props.placement === 'dock' && e.viewport?.isFullscreen !== false
@@ -357,6 +392,14 @@ export const register: Register = on => {
             <Button key="hint-off" plain dimColor onPress={async () => { await update($, hintOff, () => true); await $.store.set('hintOff', true) }}>[ got it ]</Button>
           </Box>
         )}
+        {isAdding
+          ? <Input key="new-thread" label="+ " placeholder="thread name" submitLabel="make" autoFocus
+              onSubmit={async v => {
+                const name = v.trim().toLowerCase().replace(/\s+/g, '-')
+                if (name) await update($, threads, ts => ts.some(t => t.name === name) ? ts : [{ name, words: [], isOpen: true }, ...ts])
+                await update($, adding, () => false)
+              }} />
+          : <Button key="add-thread" plain dimColor onPress={() => update($, adding, () => true)}>[ + thread ]</Button>}
         {names.map((name, i) => {
           const hue = HUES[i % HUES.length]
           const t = list.find(x => x.name === name)
