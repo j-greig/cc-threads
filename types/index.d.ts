@@ -1,4 +1,4 @@
-export type Thread = { name: string; words: string[]; isOpen: boolean }
+export type Thread = { name: string; words: string[]; isOpen: boolean; openedAt?: number }
 export type Item = {
   id: string
   thread: string

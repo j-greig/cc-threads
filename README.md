@@ -91,6 +91,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 - **Auto-organise (on by default).** Claude sees your drawers and tags each agent it starts with one, reusing a drawer when the work fits and inventing a short name when nothing does. A new `[tag]` makes its drawer.
 - **Files chat work by itself.** With `auto_file = true`, after each turn haiku reads the request and the answer, files the work into the matching drawer (or a new drawer for a clearly new project), adds up to three keywords to that drawer and shows a toast.
 - **Files chat work.** When Claude does a job itself that belongs in a drawer, it files it (through `"_log"` in `inbox.json`) and ends with one line saying where. It offers `/threads log <drawer> <title>` only when no drawer fits or two fit equally.
+- **Quiet by default.** Chat-filed entries show a dim `·` and arrive seen; entries show age and run time; drawers idle for `fold_after_hours` (24) fold themselves; `✎` renames a drawer, and an existing name merges into it.
 - **Tidy suggestions.** A drawer with no running agent and no news for 15 minutes counts as quiet. You get a toast, and Claude suggests `/threads tidy` once in chat. `/threads tidy` removes the quiet drawers.
 
 ## Settings ⚙

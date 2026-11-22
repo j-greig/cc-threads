@@ -13,6 +13,7 @@ const items = atom({ plugin: 'threads', key: 'items' } as const, [], { shape: 'i
 const open1 = atom({ plugin: 'threads', key: 'open1' } as const, '', { shape: 'open1-1' })
 const hintOff = atom({ plugin: 'threads', key: 'hintOff' } as const, false, { shape: 'hintOff-1' })
 const adding = atom({ plugin: 'threads', key: 'adding' } as const, false, { shape: 'adding-1' })
+const renaming = atom({ plugin: 'threads', key: 'renaming' } as const, '', { shape: 'renaming-1' })
 const tick = atom({ plugin: 'threads', key: 'tick' } as const, 0, { shape: 'tick-1' })
 
 const DEFAULTS: Thread[] = [
@@ -39,6 +40,12 @@ function ago(ms: number): string {
   return s < 60 ? s + 's' : s < 3600 ? Math.round(s / 60) + 'm' : Math.round(s / 3600) + 'h'
 }
 
+function dur(ms: number): string {
+  const s = Math.round(ms / 1000)
+  return s < 60 ? s + 's' : s < 3600 ? Math.round(s / 60) + 'm' : (s / 3600).toFixed(1) + 'h'
+}
+const CHAT = (x: Item) => x.report === 'auto-filed from chat' || x.report === 'done in chat'
+
 function hhmm(ms: number): string {
   const d = new Date(ms)
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
@@ -64,8 +71,8 @@ let pending = ''
 const addNote = (all: Item[], id: string, note: string) =>
   all.map(x => (x.id === id && !(x.notes || []).includes(note) ? { ...x, notes: [...(x.notes || []), note].slice(-8), seen: false } : x))
 
-type Cfg = { auto_organise: boolean; idle_minutes: number; suggest_tidy: boolean; show_per_fold: number; keep_items: number; open_on_start: boolean; top_buttons_after: number; status_every_minutes: number; summaries: boolean; auto_file: boolean }
-const CFG0: Cfg = { auto_organise: true, idle_minutes: 15, suggest_tidy: true, show_per_fold: 6, keep_items: 120, open_on_start: true, top_buttons_after: 15, status_every_minutes: 5, summaries: true, auto_file: true }
+type Cfg = { auto_organise: boolean; idle_minutes: number; suggest_tidy: boolean; show_per_fold: number; keep_items: number; open_on_start: boolean; top_buttons_after: number; fold_after_hours: number; status_every_minutes: number; summaries: boolean; auto_file: boolean }
+const CFG0: Cfg = { auto_organise: true, idle_minutes: 15, suggest_tidy: true, show_per_fold: 6, keep_items: 120, open_on_start: true, top_buttons_after: 15, fold_after_hours: 24, status_every_minutes: 5, summaries: true, auto_file: true }
 let cfg: Cfg = { ...CFG0 }
 // threads.toml: flat "key = value" lines; # comments; unknown keys ignored.
 function parseToml(txt: string): Partial<Cfg> {
@@ -112,7 +119,7 @@ function autoFile($: EngineInterface, answer: string) {
       const id = 'log-' + name + '-' + j.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)
       if ((await read($, items)).some(x => x.id === id)) return
       const now = Date.now()
-      await update($, items, ys => [...ys, { id, thread: name, title: j.title!, status: 'done' as const, started: now, ended: now, report: 'auto-filed from chat', seen: false }].slice(-cfg.keep_items))
+      await update($, items, ys => [...ys, { id, thread: name, title: j.title!, status: 'done' as const, started: now, ended: now, report: 'auto-filed from chat', seen: true }].slice(-cfg.keep_items))
       $.ui.toast('threads: ' + (exists ? '' : 'new drawer · ') + name + ' ← ' + j.title)
     } catch { /* filing is best effort */ }
   })()
@@ -177,7 +184,7 @@ export const register: Register = on => {
         if ((await read($, items)).some(x => x.id === id)) continue
         if (!(await read($, threads)).some(t => t.name === L.drawer)) await update($, threads, l => [...l, { name: L.drawer!, words: [L.drawer!], isOpen: true }])
         const now = Date.now()
-        await update($, items, xs => [...xs, { id, thread: L.drawer!, title: L.title!, status: 'done' as const, started: now, ended: now, report: 'done in chat', seen: false }].slice(-cfg.keep_items))
+        await update($, items, xs => [...xs, { id, thread: L.drawer!, title: L.title!, status: 'done' as const, started: now, ended: now, report: 'done in chat', seen: true }].slice(-cfg.keep_items))
       }
       delete m._log
       for (const [id, ns] of Object.entries(m as Record<string, string[]>)) for (const n of ns) await update($, items, all => addNote(all, id, n))
@@ -228,7 +235,7 @@ export const register: Register = on => {
     if (verb === 'log' && name && ws) {
       if (!(await read($, threads)).some(t => t.name === name)) await update($, threads, list => [...list, { name, words: [name], isOpen: true }])
       const now = Date.now()
-      await update($, items, xs => [...xs, { id: 'log-' + now, thread: name, title: ws, status: 'done' as const, started: now, ended: now, report: 'done in chat', seen: false }].slice(-cfg.keep_items))
+      await update($, items, xs => [...xs, { id: 'log-' + now, thread: name, title: ws, status: 'done' as const, started: now, ended: now, report: 'done in chat', seen: true }].slice(-cfg.keep_items))
       return { text: 'Logged in ' + name + ': ' + ws }
     }
     if (verb === 'config') return { text: 'Config file: ' + $.plugin.root + '/threads.toml\n' + Object.entries(cfg).map(([k, v]) => k + ' = ' + v).join('\n') }
@@ -362,13 +369,32 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Link, Input } = $.ui.resolve(e)
+    const list = await read($, threads)
+    const all = await read($, items)
     const isAdding = await read($, adding)
+    const ren = await read($, renaming)
+    const lastOf = (name: string) => Math.max(0, ...all.filter(x => x.thread === name).map(x => x.ended || x.started))
+    const folded = (t: Thread) => {
+      const mine = all.filter(x => x.thread === t.name)
+      if (!mine.length || mine.some(x => x.status === 'running' || !x.seen)) return false
+      const last = lastOf(t.name)
+      return Date.now() - last > cfg.fold_after_hours * 3600000 && (t.openedAt || 0) < last + cfg.fold_after_hours * 3600000
+    }
+    const rename = async (from: string, raw: string) => {
+      const to = raw.trim().toLowerCase().replace(/\s+/g, '-')
+      await update($, renaming, () => '')
+      if (!to || to === from) return
+      await update($, threads, ts => {
+        const a = ts.find(t => t.name === from), b = ts.find(t => t.name === to)
+        if (b) return ts.filter(t => t.name !== from).map(t => t.name === to ? { ...t, words: [...new Set([...t.words, ...(a?.words || [])])], isOpen: true } : t)
+        return ts.some(t => t.name === from) ? ts.map(t => t.name === from ? { ...t, name: to } : t) : [{ name: to, words: [], isOpen: true }, ...ts]
+      })
+      await update($, items, xs => xs.map(x => x.thread === from ? { ...x, thread: to } : x))
+    }
     const linkify = (t: string) => t.split(/(https?:\/\/[^\s<>()\[\]"'`]+[^\s<>()\[\]"'`.,;:!?])/).map((part, k) => k % 2 ? <Link key={'u' + k} href={part}>{part}</Link> : part)
     const dismissed = await read($, hintOff)
     const docked = e.props.placement === 'dock' && e.viewport?.isFullscreen !== false
     const narrow = (e.props.bodyColumns ?? 80) < 34
-    const list = await read($, threads)
-    const all = await read($, items)
     const opened = await read($, open1)
     const n = await read($, tick)
     const spin = SPIN[n % SPIN.length]
@@ -376,7 +402,7 @@ export const register: Register = on => {
     const names = [...list.map(t => t.name), ...[...new Set(all.filter(x => !known(x)).map(x => x.thread))]]
     const toggle = async (name: string) => {
       await update($, threads, ts => ts.find(t => t.name === name)
-        ? ts.map(t => (t.name === name ? { ...t, isOpen: !t.isOpen } : t))
+        ? ts.map(t => (t.name === name ? { ...t, isOpen: !t.isOpen || folded(t), openedAt: Date.now() } : t))
         : [...ts, { name, words: [], isOpen: false }])
       await update($, items, xs => xs.map(x => (x.thread === name ? { ...x, seen: true } : x)))
     }
@@ -399,28 +425,32 @@ export const register: Register = on => {
                 if (name) await update($, threads, ts => ts.some(t => t.name === name) ? ts : [{ name, words: [], isOpen: true }, ...ts])
                 await update($, adding, () => false)
               }} />
-          : <Button key="add-thread" plain dimColor onPress={() => update($, adding, () => true)}>[ + thread ]</Button>}
+          : <Box marginBottom={1} paddingLeft={4}><Button key="add-thread" plain dimColor onPress={() => update($, adding, () => true)}>[ + thread ]</Button></Box>}
         {names.map((name, i) => {
           const hue = HUES[i % HUES.length]
           const t = list.find(x => x.name === name)
-          const isOpen = t ? t.isOpen : true
+          const isOpen = t ? t.isOpen && !folded(t) : true
           const mine = all.filter(x => x.thread === name)
           const running = mine.filter(x => x.status === 'running').length
           const fresh = mine.filter(x => x.status !== 'running' && !x.seen).length
           return (
             <Box flexDirection="column" key={name} marginBottom={1}>
               <Box flexDirection="row">
-                <Button key={'t:' + name} hotkey={i < 9 ? String(i + 1) : undefined} plain onPress={() => toggle(name)}>
-                  <Text color={hue} bold>{(isOpen ? '[▾] ' : '[▸] ') + name}</Text>
-                </Button>
+                {ren === name
+                  ? <Input key={'r:' + name} label="✎ " placeholder={name + ' (existing name merges)'} submitLabel="rename" autoFocus onSubmit={v => rename(name, v)} />
+                  : <Button key={'t:' + name} hotkey={i < 9 ? String(i + 1) : undefined} plain onPress={() => toggle(name)}>
+                      <Text color={hue} bold>{(isOpen ? '[▾] ' : '[▸] ') + name}</Text>
+                    </Button>}
                 <Text> </Text>
                 {running > 0 && <Text color={hue}>{spin + ' ' + running + ' running '}</Text>}
                 {fresh > 0 && <Text inverse color={hue}>{' ' + fresh + ' new '}</Text>}
-                {!running && !fresh && <Text dimColor>{mine.length ? mine.length + (mine.length === 1 ? ' entry' : ' entries') : 'empty'}</Text>}
+                {!running && !fresh && <Text dimColor>{(mine.length ? mine.length + (mine.length === 1 ? ' entry' : ' entries') : 'empty') + (!isOpen && mine.length ? ' · ' + ago(lastOf(name)) : '')}</Text>}
                 {isOpen && mine.some(x => x.status !== 'running') && <Text> </Text>}
                 {isOpen && mine.some(x => x.status !== 'running') && <Button key={'c:' + name} plain dimColor onPress={() => clear(name)}>clear</Button>}
                 {isOpen && <Text> </Text>}
                 {isOpen && <Button key={'p:' + name} plain onPress={() => $.prompt.fill({ text: '/threads ' + name + ' ', mode: 'replace' })}><Text color={hue}>+ task</Text></Button>}
+                {isOpen && <Text> </Text>}
+                {isOpen && <Button key={'e:' + name} plain dimColor onPress={() => update($, renaming, c => c === name ? '' : name)}>✎</Button>}
                 {isOpen && <Text> </Text>}
                 {isOpen && <Button key={'d:' + name} plain dimColor onPress={async () => { await update($, threads, ts => ts.filter(t => t.name !== name)); await update($, items, xs => xs.filter(x => x.thread !== name || x.status === 'running')) }}>✕</Button>}
               </Box>
@@ -437,20 +467,20 @@ export const register: Register = on => {
                     <Button key={'x' + at + ':' + x.id} plain dimColor onPress={async () => { await update($, items, xs => xs.filter(y => y.id !== x.id)); await update($, open1, () => '') }}>✕ remove</Button>
                   </Box>
                 )
-                const mark = x.status === 'running' ? spin : x.status === 'failed' ? '✗' : '✓'
+                const mark = x.status === 'running' ? spin : x.status === 'failed' ? '✗' : CHAT(x) ? '·' : '✓'
                 return (
                   <Box flexDirection="column" key={x.id} paddingLeft={2} borderStyle={big ? 'single' : undefined} borderColor={hue}>
                     <Box flexDirection="row">
-                      <Text color={x.status === 'failed' ? 'red' : hue}>{mark + ' '}</Text>
+                      <Text color={x.status === 'failed' ? 'red' : hue} dimColor={CHAT(x)}>{mark + ' '}</Text>
                       <Button key={'i:' + x.id} plain onPress={() => update($, open1, cur => (cur === x.id ? '' : x.id))}>
-                        <Text bold={!x.seen && x.status !== 'running'}>{x.title}</Text>
+                        <Text bold={!x.seen && x.status !== 'running'} dimColor={CHAT(x)}>{x.title}</Text>
                       </Button>
-                      <Text dimColor>{'  ' + (x.status === 'running' ? ago(x.started) : hhmm(x.ended || x.started))}</Text>
+                      <Text dimColor>{'  ' + (x.status === 'running' ? ago(x.started) : ago(x.ended || x.started) + ' ago' + (x.ended && x.ended - x.started >= 1000 ? ' · took ' + dur(x.ended - x.started) : ''))}</Text>
                     </Box>
                     {x.status === 'running' && x.step && (Date.now() - (x.bubbleAt || 0) < 60000
                       ? <Text color={hue} bold wrap="truncate-end">{'  ◆ ' + ago(x.started) + ' · ' + (x.summary || (x.steps || 0) + ' steps · now ' + x.step)}</Text>
                       : <Text dimColor wrap="truncate-end">{'  ⋯ ' + (x.summary ? x.summary + ' · ' : '') + x.step}</Text>)}
-                    {!big && x.report && <Text dimColor wrap="truncate-end">{'  ' + x.report}</Text>}
+                    {!big && x.report && !CHAT(x) && <Text dimColor wrap="truncate-end">{'  ' + x.report}</Text>}
                     {big && rows > cfg.top_buttons_after && acts('t')}
                     {big && <Text wrap="wrap">{linkify(body)}</Text>}
                     {big && (x.notes || []).map((n, k) => <Text key={'n' + k} color={n.startsWith('you:') ? undefined : hue} wrap="wrap">{'⟜ ' + n}</Text>)}
