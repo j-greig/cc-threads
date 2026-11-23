@@ -64,6 +64,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 /threads tidy                  remove drawers quiet for idle_minutes
 /threads config                show the settings file and values
 /threads                       open the pane
+/sidecar <question>            ask a side question; the answer lands in the pane, not in the chat
 ```
 `/thread` works the same.
 
@@ -77,7 +78,7 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 - `↳ reply` and `↳ message` fill your prompt with a marker line: `⟜ threads › build › "title" (agent id)`. Type under it. The line says which entry the prompt is about, so Claude can look up that agent.
 - A prompt that starts with the `⟜` line is filed as a `⟜` note on that entry, and so is Claude's answer. Notes show under the report when the entry is open, and the latest one shows when it is closed.
 - `✕` on an open fold's header drops the fold and its finished entries. Running agents stay.
-- Claude can act on the pane by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}` adds notes, `"_move": {"<agent id>": "<drawer>"}` files an entry, `"_rename": {"<old>": "<new>"}` renames a drawer, and `"_log": [{"drawer": "<name>", "title": "<title>"}]` files chat work as a done entry (one entry per drawer and title). Ask in chat ("put that in tweets") and Claude does it.
+- Claude can act on the pane by writing `inbox.json` in the mod folder: `{"<agent id>": ["note"]}` adds notes, `"_move": {"<agent id>": "<drawer>"}` files an entry, `"_rename": {"<old>": "<new>"}` renames a drawer, `"_log": [{"drawer": "<name>", "title": "<title>"}]` files chat work as a done entry (one entry per drawer and title), and `"_sidecar": [{"question": "<question>", "answer": "<answer>"}]` files an answer as a sidecar. Ask in chat ("put that in tweets") and Claude does it.
 - A running entry shows its agent's current step (`⋯ Bash · uv run prof.py`). Every 5 minutes it flashes a one-line summary for a minute (`◆ 12m · export down from 193 s to 84 s, testing partial captures`), written by a small model from the agent's last 15 steps, so long jobs check in without you asking.
 - `◉ watch` on a running entry opens that agent's live transcript in the main view.
 - An open entry longer than 15 lines shows `↳ reply` and `✕ remove` at its top as well as its bottom.
@@ -85,6 +86,33 @@ Narrow terminals get the drawers stacked above the prompt, which works but is sa
 - Folds, reports and notes are kept across sessions.
 - The mod adds nothing to the status line. Your status line is yours.
 - Ask an agent to look up "42". Find out what happens.
+
+## Sidecars
+
+A sidecar is a side question whose answer is kept beside the chat. It replaces asking Claude to write a summary to a file in `/tmp` so that it stays out of the conversation.
+
+```
+── sidecars 3
+    [ + sidecar ]
+[▾] what have we changed so far? · 2m
+  tl;dr: the pane gained a sidecar section.
+  - one new command, /sidecar
+  - one new inbox key, _sidecar
+  ↻ ask again   ⧉ copy   ✕ remove
+[▸] which branch are we on? · 14m
+[▸] is the export fixed yet? · 1h
+```
+
+- `/sidecar what have we changed so far, tldr then bullets` asks the question. Everything after the command is the question.
+- The mod answers it with a fork of the session: the same conversation plus this one question, with no tools. The answer knows what the session knows. Neither the question nor the answer is added to the conversation, so the task in progress carries on as it was.
+- It works while a turn is running. The command does not wait for the turn to end.
+- The answer lands in the sidecar section at the bottom of the pane, under the drawers. A toast says when it has arrived.
+- Sidecars stack, newest first. Asking a new one folds the others. A folded sidecar is one line: the question and its age. Click a line to open or close it; any number can be open.
+- `[ + sidecar ]` asks from the pane, without using the prompt box.
+- An open sidecar has `↻ ask again`, `⧉ copy` (the answer, to the clipboard) and `✕ remove`.
+- Sidecars are kept across sessions, the newest `keep_sidecars` (20) of them.
+- A fork cannot run commands or read files. It answers from the conversation so far. For an answer that needs tools, ask in chat for it "in a sidecar": Claude does the work and files the answer through `"_sidecar"` in `inbox.json`.
+- A session has nothing to fork until its first turn has finished, and again after `/clear`. The sidecar says so; send a prompt, then press `↻ ask again`.
 
 ## Claude keeps it tidy ✧
 
@@ -108,6 +136,7 @@ open_on_start = true    # open the pane when a session starts
 top_buttons_after = 15  # long entries get reply/remove at the top too
 status_every_minutes = 5  # running entries flash their progress this often; 0 = off
 summaries = true          # a small model writes the flash line
+keep_sidecars = 20        # /sidecar answers kept in the pane
 ```
 
 Changes load on the next session.
