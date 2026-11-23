@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelForkResult, Register } from 'claude-code'
 
-import type { Item, Sidecar, Thread } from '../types'
+import type { FileView, Item, Sidecar, Thread } from '../types'
 import { hasRefs, refLine, refToken, resolveRefs, stripRefs } from './refs'
 import type { RefKinds } from './refs'
 
@@ -19,6 +19,7 @@ const renaming = atom({ plugin: 'threads', key: 'renaming' } as const, '', { sha
 const tick = atom({ plugin: 'threads', key: 'tick' } as const, 0, { shape: 'tick-1' })
 const sidecars = atom({ plugin: 'threads', key: 'sidecars' } as const, [], { shape: 'sidecars-1' })
 const asking = atom({ plugin: 'threads', key: 'asking' } as const, false, { shape: 'asking-1' })
+const files = atom({ plugin: 'threads', key: 'files' } as const, [], { shape: 'files-1' })
 
 const DEFAULTS: Thread[] = [
   { name: 'build', words: ['build', 'fix', 'implement', 'refactor'], isOpen: true },
@@ -158,7 +159,7 @@ function whyNot(r: Exclude<ModelForkResult, { isAnswered: true }>): string {
 // With an id, that sidecar's title row goes to the top of the window; without one, or if that is refused, the pane's end.
 async function reveal($: EngineInterface, id?: string) {
   try {
-    const r = id ? await $.ui.scroll({ in: PANE, to: { key: 's:' + id }, block: 'start' }) : undefined
+    const r = id ? await $.ui.scroll({ in: PANE, to: { key: id.startsWith('f:') ? id : 's:' + id }, block: 'start' }) : undefined
     if (!r || r.deny) await $.ui.scroll({ in: PANE, to: 'end' })
   } catch { /* the pane is not placed, or has nothing to scroll */ }
 }
@@ -166,7 +167,15 @@ async function reveal($: EngineInterface, id?: string) {
 // sidecar: a sidecar is outside the conversation, so the model cannot see one unless a ref hands it over.
 async function refKinds($: EngineInterface): Promise<RefKinds> {
   const sides = await read($, sidecars)
+  const fileViews = await read($, files)
   return {
+    // file: the file as the pane holds it, with any unsaved draft, so "this file" in a prompt means what the person sees.
+    file: id => {
+      const f = fileViews.find(x => x.path === id)
+      if (!f) return undefined
+      const body = f.draft !== undefined && f.draft !== f.text ? 'Unsaved draft in the pane (the file on disk differs):\n' + f.draft : f.text
+      return 'Threads mod: ' + refToken('file', id) + ' in the prompt points at the file ' + f.path + ', open in the threads pane.\n' + clip(body)
+    },
     sidecar: id => {
       const s = sides.find(x => x.id === id && !x.gone)
       if (!s || !s.answer) return undefined
@@ -203,6 +212,52 @@ async function askSidecar($: EngineInterface, question: string, again?: string) 
   })()
 }
 
+// Files: a .md or plain-text file read from disk into the pane's file section, below the sidecars.
+// Opened with /file <path>, or by clicking a path ending .md/.markdown/.txt in a report or sidecar.
+// Markdown is drawn with the same Markdown element the sidecars use; edit mode is a multi-line Input,
+// Enter saves it back to disk. Open files keep their path and any unsaved draft across sessions.
+const FILE_HUE = '#5fd7af'
+const FILE_RE = /((?:~|\.{1,2})?\/?(?:[\w.@+-]+\/)*[\w.@+-]+\.(?:md|markdown|txt))(?![\w/])/
+const MAX_FILE = 200000
+// What one drawing may hold: the rendered view shows the start of a long file; edit mode holds all of it.
+const VIEW_CHARS = 12000
+// "~/" is expanded with the home folder taken from the mod's own path (…/<home>/.claude/…).
+function fullPath($: EngineInterface, p: string): string {
+  const home = $.plugin.root.split('/.claude/')[0] || ''
+  return p.startsWith('~/') && home ? home + p.slice(1) : p
+}
+const shortPath = (p: string, n: number) => (p.length > n ? '…' + p.slice(-(n - 1)) : p)
+async function loadFile($: EngineInterface, path: string): Promise<{ text: string, error?: string }> {
+  try {
+    const text = await $.fs.read(path)
+    if (text.length > MAX_FILE) return { text: '', error: 'Too large to open here (' + Math.round(text.length / 1000) + ' KB; the limit is ' + MAX_FILE / 1000 + ' KB).' }
+    return { text }
+  } catch (err) { return { text: '', error: 'Could not read the file: ' + String(err).slice(0, 160) } }
+}
+// Opens a file in the pane, or brings an already open one to the top and reads it again (a draft is kept).
+async function openFile($: EngineInterface, raw: string) {
+  const path = fullPath($, raw.trim())
+  const got = await loadFile($, path)
+  const now = Date.now()
+  await update($, files, xs => {
+    const old = xs.find(f => f.path === path)
+    const fresh: FileView = { path, text: got.text, draft: old?.draft, isEditing: old?.isEditing ?? false, isOpen: true, opened: now, error: got.error }
+    return [...xs.filter(f => f.path !== path).map(f => (f.isOpen ? { ...f, isOpen: false } : f)), fresh].slice(-10)
+  })
+  await $.ui.open({ id: PANE, title: 'Threads' })
+  void reveal($, 'f:' + path)
+  return got
+}
+async function saveFile($: EngineInterface, path: string, text: string) {
+  try {
+    await $.fs.write(path, text)
+    await update($, files, xs => xs.map(f => (f.path === path ? { ...f, text, draft: undefined, isEditing: false, error: undefined } : f)))
+    $.ui.toast('saved ' + shortPath(path, 50))
+  } catch (err) {
+    await update($, files, xs => xs.map(f => (f.path === path ? { ...f, draft: text, error: 'Not saved: ' + String(err).slice(0, 160) } : f)))
+  }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     // $.state ends with the session; $.store keeps threads and reports across sessions.
@@ -210,17 +265,27 @@ export const register: Register = on => {
     const savedT = (await $.store.get('threads')) as Thread[] | undefined
     const savedI = (await $.store.get('items')) as Item[] | undefined
     const savedS = (await $.store.get('sidecars')) as Sidecar[] | undefined
+    const savedF = (await $.store.get('files')) as FileView[] | undefined
     await update($, threads, list => list.length ? list : savedT && savedT.length ? savedT : DEFAULTS)
     await update($, items, list => list.length ? list : savedI ?? [])
     // A sidecar still asking when the last session ended never got its answer: say so, and offer to ask again.
     await update($, sidecars, list => list.length ? list : (savedS ?? []).map(s => s.status === 'asking' ? { ...s, status: 'failed' as const, error: 'The session ended before the answer came back. Press ask again.' } : s))
+    // Open files are read from disk again, so the pane shows what is on disk now; an unsaved draft is kept.
+    if (!(await read($, files)).length && savedF && savedF.length) {
+      const back: FileView[] = []
+      for (const f of savedF) back.push({ ...f, ...(await loadFile($, f.path)) })
+      await update($, files, () => back)
+    }
     if (await $.store.get('hintOff')) await update($, hintOff, () => true)
     let last = ''
     $.clock.every(2000, async () => {
-      const snap = JSON.stringify([await read($, threads), await read($, items), await read($, sidecars)])
+      // Files are stored without their text (it is on disk); a draft is stored so an unsaved edit survives.
+      const fs = (await read($, files)).map(f => ({ ...f, text: '' }))
+      const snap = JSON.stringify([await read($, threads), await read($, items), await read($, sidecars), fs])
       if (snap === last) return
       last = snap
-      const [t, i, s] = JSON.parse(snap)
+      const [t, i, s, f] = JSON.parse(snap)
+      await $.store.set('files', f)
       await $.store.set('threads', t)
       await $.store.set('items', i)
       await $.store.set('sidecars', s)
@@ -233,6 +298,7 @@ export const register: Register = on => {
     // immediate: typed while a turn is running, it runs at once instead of waiting for the turn to end.
     // In a try: a build that refuses this registration must not stop the rest of session.start; the pane's button still asks.
     try { await $.command.register({ name: 'sidecar', description: 'Ask a side question: the answer lands in the threads pane, not in the chat', argumentHint: '<question>', immediate: true }) } catch { /* no /sidecar command on this build */ }
+    try { await $.command.register({ name: 'file', description: 'Open a .md or text file in the threads pane to read or edit', argumentHint: '<path>', immediate: true }) } catch { /* no /file command on this build */ }
     $.clock.every(250, async () => {
       const xs = await read($, items)
       const run = xs.filter(x => x.status === 'running')
@@ -407,6 +473,13 @@ export const register: Register = on => {
     return { text: 'Sidecar asked. The answer will show in the threads pane.', isTextDisplayOnly: true as const }
   })
 
+  on('command.run', { command: 'file' }, async ($, e) => {
+    const p = e.args.trim().replace(/^["']|["']$/g, '')
+    if (!p) return { text: 'Usage: /file <path>. The file opens in the file section of the threads pane.', isTextDisplayOnly: true as const }
+    const got = await openFile($, p)
+    return { text: got.error ? got.error : 'Opened ' + p + ' in the threads pane.', isTextDisplayOnly: true as const }
+  })
+
   // Auto-organise: tell the model the drawers so it tags each agent; also pass on any tidy suggestion.
   on('prompt.compose', async ($, e, next) => {
     const r = await next(e)
@@ -508,6 +581,12 @@ export const register: Register = on => {
       await update($, items, xs => xs.map(x => x.thread === from ? { ...x, thread: to } : x))
     }
     const linkify = (t: string) => t.split(/(https?:\/\/[^\s<>()\[\]"'`]+[^\s<>()\[\]"'`.,;:!?])/).map((part, k) => k % 2 ? <Link key={'u' + k} href={part}>{part}</Link> : part)
+    // A Button may not sit inside Text, so each .md/.markdown/.txt path named in a text gets its own
+    // "⇲ open" row under that text; pressing it opens the file in the file section.
+    const opens = (at: string, t: string) => [...new Set(t.replace(/https?:\/\/\S+/g, ' ').match(new RegExp(FILE_RE.source, 'g')) || [])].slice(0, 6).map(p =>
+      <Button key={'po:' + at + ':' + p} plain dimColor onPress={() => { void openFile($, p) }}><Text color={FILE_HUE}>{'⇲ open ' + p}</Text></Button>)
+    const views = await read($, files)
+    const setFile = (path: string, fn: (f: FileView) => FileView) => update($, files, xs => xs.map(f => (f.path === path ? fn(f) : f)))
     const dismissed = await read($, hintOff)
     const docked = e.props.placement === 'dock' && e.viewport?.isFullscreen !== false
     const narrow = (e.props.bodyColumns ?? 80) < 34
@@ -605,6 +684,7 @@ export const register: Register = on => {
                     {!big && x.report && !CHAT(x) && <Text dimColor wrap="truncate-end">{'  ' + x.report}</Text>}
                     {big && rows > cfg.top_buttons_after && acts('t')}
                     {big && <Text wrap="wrap">{linkify(body)}</Text>}
+                    {big && opens(x.id, body)}
                     {big && (x.notes || []).map((n, k) => <Text key={'n' + k} color={n.startsWith('you:') ? undefined : hue} wrap="wrap">{'⟜ ' + n}</Text>)}
                     {!big && (x.notes || []).length > 0 && <Text dimColor wrap="truncate-end">{'  ⟜ ' + (x.notes || [])[(x.notes || []).length - 1]}</Text>}
                     {big && acts('b')}
@@ -644,6 +724,7 @@ export const register: Register = on => {
                       {head !== q && <Text dimColor wrap="wrap">{q}</Text>}
                       {s.status === 'asking' && <Text dimColor>asking a fork of the conversation…</Text>}
                       {s.answer && <Markdown key={'sm:' + s.id} text={s.answer} dimColor={s.status === 'asking'} />}
+                      {s.answer && opens(s.id, s.answer)}
                       {s.error && <Text color="red" wrap="wrap">{s.error}</Text>}
                       <Box flexDirection="row">
                         {s.via === 'fork' && (s.status !== 'asking' || stuck) && <Button key={'sa:' + s.id} plain dimColor onPress={() => askSidecar($, s.question, s.id)}>↻ ask again</Button>}
@@ -662,6 +743,56 @@ export const register: Register = on => {
                           <Button key={'sf:' + s.id} plain dimColor onPress={() => $.prompt.fill({ text: '/sidecar ' + refToken('sidecar', s.id) + ' ', mode: 'replace' })}>↪ follow up</Button>
                         </Box>
                       )}
+                    </Box>
+                  )}
+                </Box>
+              )
+            })}
+          </Box>
+        )}
+        {views.length > 0 && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color={FILE_HUE} wrap="truncate-end">{'── files ' + views.length}</Text>
+            {[...views].reverse().map(f => {
+              const dirty = f.draft !== undefined && f.draft !== f.text
+              const name = f.path.split('/').pop() || f.path
+              const isMd = /\.(md|markdown)$/i.test(f.path)
+              const tail = (dirty ? '● unsaved · ' : '') + (f.isEditing ? 'editing' : ago(f.opened))
+              return (
+                <Box flexDirection="column" key={'fv:' + f.path}>
+                  <Box flexDirection="row">
+                    <Button key={'f:' + f.path} plain onPress={() => setFile(f.path, x => ({ ...x, isOpen: !x.isOpen }))}>
+                      <Text color={FILE_HUE} bold={dirty}>{(f.isOpen ? '[▾] ' : '[▸] ') + cut(name, Math.max(8, cols - 7 - tail.length))}</Text>
+                    </Button>
+                    <Text color={dirty ? 'yellow' : undefined} dimColor={!dirty}>{' · ' + tail}</Text>
+                  </Box>
+                  {f.isOpen && (
+                    <Box flexDirection="column" paddingLeft={2}>
+                      <Text dimColor wrap="truncate-start">{f.path}</Text>
+                      {f.error && <Text color="red" wrap="wrap">{f.error}</Text>}
+                      <Box flexDirection="row">
+                        {!f.isEditing && !f.error && <Button key={'fe:' + f.path} plain dimColor onPress={() => setFile(f.path, x => ({ ...x, isEditing: true, draft: x.draft ?? x.text }))}>✎ edit</Button>}
+                        {f.isEditing && <Button key={'fw:' + f.path} plain dimColor onPress={() => setFile(f.path, x => ({ ...x, isEditing: false }))}>◉ view</Button>}
+                        <Text>   </Text>
+                        {dirty && <Button key={'fs:' + f.path} plain onPress={() => saveFile($, f.path, f.draft || '')}><Text color="yellow">⤓ save</Text></Button>}
+                        {dirty && <Text>   </Text>}
+                        {dirty && <Button key={'fd:' + f.path} plain dimColor onPress={() => setFile(f.path, x => ({ ...x, draft: undefined, isEditing: false }))}>↺ discard</Button>}
+                        {dirty && <Text>   </Text>}
+                        {!dirty && <Button key={'fr:' + f.path} plain dimColor onPress={() => { void openFile($, f.path) }}>↻ reload</Button>}
+                        {!dirty && <Text>   </Text>}
+                        <Button key={'fc:' + f.path} plain dimColor onPress={() => $.prompt.fill({ text: refLine('file', f.path, name) + '\n', mode: 'insert' })}>→ chat</Button>
+                        <Text>   </Text>
+                        <Button key={'fx:' + f.path} plain dimColor onPress={() => update($, files, xs => xs.filter(x => x.path !== f.path))}>✕ close</Button>
+                      </Box>
+                      {f.isEditing
+                        ? <Input key={'fi:' + f.path} value={f.draft ?? f.text} rows={Math.max(6, Math.min(30, (e.props.scroll?.bodyRows ?? 30) - 8))} submitLabel="save" autoFocus
+                            onInput={v => { void setFile(f.path, x => ({ ...x, draft: v })) }}
+                            onSubmit={v => saveFile($, f.path, v)} />
+                        : !f.error && (() => {
+                            const shown = f.draft ?? f.text
+                            const body = shown.length > VIEW_CHARS ? shown.slice(0, VIEW_CHARS) + '\n\n… (the view shows the first ' + VIEW_CHARS + ' characters; edit mode holds the whole file)' : shown
+                            return isMd ? <Markdown key={'fm:' + f.path} text={body || '_(empty file)_'} /> : <Text wrap="wrap">{linkify(body || '(empty file)')}</Text>
+                          })()}
                     </Box>
                   )}
                 </Box>

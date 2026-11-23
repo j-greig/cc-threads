@@ -33,8 +33,20 @@ export type Sidecar = {
   gone?: boolean
 }
 
+// A file open in the pane's file section: a .md or plain-text file read from disk, shown rendered or edited.
+// text: the file as last read or saved. draft: the edit in progress; unsaved while it differs from text.
+export type FileView = {
+  path: string
+  text: string
+  draft?: string
+  isEditing: boolean
+  isOpen: boolean
+  opened: number
+  error?: string
+}
+
 declare module 'claude-code' {
   interface PluginState {
-    threads: { threads: Shaped<Thread[]>; items: Shaped<Item[]>; open1: Shaped<string>; tick: Shaped<number>; hintOff: Shaped<boolean>; adding: Shaped<boolean>; renaming: Shaped<string>; sidecars: Shaped<Sidecar[]>; asking: Shaped<boolean> }
+    threads: { threads: Shaped<Thread[]>; items: Shaped<Item[]>; open1: Shaped<string>; tick: Shaped<number>; hintOff: Shaped<boolean>; adding: Shaped<boolean>; renaming: Shaped<string>; sidecars: Shaped<Sidecar[]>; asking: Shaped<boolean>; files: Shaped<FileView[]> }
   }
 }

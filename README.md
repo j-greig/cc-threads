@@ -120,6 +120,16 @@ A sidecar is a side question whose answer is kept beside the chat. It replaces a
 - A fork cannot run commands or read files. It answers from the conversation so far. For an answer that needs tools, ask in chat for it "in a sidecar": Claude does the work and files the answer through `"_sidecar"` in `inbox.json`.
 - A session has nothing to fork until its first turn has finished, and again after `/clear`. The sidecar says so; send a prompt, then press `↻ ask again`.
 
+## Files
+
+`/file <path>` opens a `.md` or plain-text file in a file section at the bottom of the pane, under the sidecars.
+
+- Markdown is drawn rendered; other text is shown as it is. Long files show their first 12000 characters in the view.
+- `✎ edit` switches to a text field holding the whole file. Enter saves it to disk. `● unsaved` shows beside the name while the draft differs from the file; `⤓ save` and `↺ discard` appear with it.
+- A report or sidecar answer that names a `.md`, `.markdown` or `.txt` path gets a `⇲ open <path>` row under it.
+- `↻ reload` reads the file again, `→ chat` puts a `‹file:path›` ref in the prompt (the model gets the file, or the unsaved draft, as context), `✕ close` closes it.
+- Open files and unsaved drafts are kept across sessions; the text is read from disk again at session start.
+
 ## Claude keeps it tidy ✧
 
 - **Auto-organise (on by default).** Claude sees your drawers and tags each agent it starts with one, reusing a drawer when the work fits and inventing a short name when nothing does. A new `[tag]` makes its drawer.
