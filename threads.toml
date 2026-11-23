@@ -10,3 +10,4 @@ top_buttons_after = 15  # an open entry longer than this many lines also shows r
 status_every_minutes = 5  # a running entry flashes its progress (time, steps, current step) this often; 0 turns it off
 summaries = true          # at each status flash, a small model writes one line on where the agent has got to
 auto_file = true          # after each turn, haiku files the chat work into a matching drawer (or a new one for a new project) and adds keywords
+keep_sidecars = 20        # /sidecar answers kept in the pane's sidecar section; the oldest drop off first
