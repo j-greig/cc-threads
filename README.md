@@ -33,6 +33,8 @@ Open a drawer and it looks like this:
 ```
 
 
+It also keeps sidecars: side questions you ask with `/sidecar`, answered beside the chat and stacked at the bottom of the pane, so a quick "where have we got to?" never lands in the conversation. See [Sidecars](#sidecars).
+
 ![threads demo](docs/demo.gif)
 
 ## Install ✦
