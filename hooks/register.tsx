@@ -2,6 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelForkResult, Register } from 'claude-code'
 
 import type { Item, Sidecar, Thread } from '../types'
+import { hasRefs, refLine, refToken, resolveRefs, stripRefs } from './refs'
+import type { RefKinds } from './refs'
 
 // Threads: one fold per piece of work. Each background agent is filed under a thread
 // when it starts and its report lands there when it ends, so reports stop piling into the chat.
@@ -160,6 +162,18 @@ async function reveal($: EngineInterface, id?: string) {
     if (!r || r.deny) await $.ui.scroll({ in: PANE, to: 'end' })
   } catch { /* the pane is not placed, or has nothing to scroll */ }
 }
+// What a ‹kind:id› token in a prompt can point at (hooks/refs.ts): one lookup for each kind, over state read now.
+// sidecar: a sidecar is outside the conversation, so the model cannot see one unless a ref hands it over.
+async function refKinds($: EngineInterface): Promise<RefKinds> {
+  const sides = await read($, sidecars)
+  return {
+    sidecar: id => {
+      const s = sides.find(x => x.id === id && !x.gone)
+      if (!s || !s.answer) return undefined
+      return 'Threads mod: ' + refToken('sidecar', id) + ' in the prompt points at this sidecar, a side question answered beside the chat and not otherwise in this conversation.\nQuestion: ' + stripRefs(s.question).trim() + '\nAnswer:\n' + s.answer
+    },
+  }
+}
 // Asks a new sidecar, or asks an existing one again (again = its id). Resolves once the sidecar is in the pane;
 // the fork answers later, in the background, so neither the command nor a running turn waits for it.
 async function askSidecar($: EngineInterface, question: string, again?: string) {
@@ -173,7 +187,9 @@ async function askSidecar($: EngineInterface, question: string, again?: string) 
   void (async () => {
     let answer = '', error = ''
     try {
-      const r = await $.model.fork({ prompt: sidePrompt(question) })
+      // A question that points at earlier sidecars (‹sidecar:id›) carries them: a fork cannot see sidecars otherwise.
+      const refs = hasRefs(question) ? resolveRefs(question, await refKinds($)) : []
+      const r = await $.model.fork({ prompt: sidePrompt(question) + (refs.length ? '\n\n' + refs.join('\n\n') : '') })
       if (r.isAnswered) answer = clip(r.text.trim())
       else error = whyNot(r)
     } catch (err) { error = 'The fork failed: ' + String(err).slice(0, 200) }
@@ -421,7 +437,11 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('prompt.submit', async ($, e, next) => { const t = (e as { text?: string }).text || ''; if (!t.startsWith('⟜') && (e as { command?: { name?: string } }).command?.name !== 'sidecar') lastAsk = t; return next(e) })
+  on('prompt.submit', async ($, e, next) => { const t = (e as { text?: string }).text || ''; if (!t.startsWith('⟜') && (e as { command?: { name?: string } }).command?.name !== 'sidecar') lastAsk = t
+    // Refs: each ‹kind:id› token in a typed prompt is resolved and attached as context. A slash command's line is left alone.
+    const refs = !(e as { command?: unknown }).command && hasRefs(t) ? resolveRefs(t, await refKinds($)) : []
+    return next(refs.length ? { ...e, context: [...(e.context ?? []), ...refs] } : e)
+  })
   on('agent.spawn', async ($, e, next) => {
     const r = await next(e)
     const id = ('agentId' in r && r.agentId) || e.tool_use_id
@@ -606,7 +626,7 @@ export const register: Register = on => {
                   }} />
               : <Box paddingLeft={4}><Button key="add-sidecar" plain dimColor onPress={() => update($, asking, () => true)}>[ + sidecar ]</Button></Box>}
             {[...sides].reverse().map(s => {
-              const q = s.question.replace(/\s+/g, ' ')
+              const q = stripRefs(s.question, '↪').replace(/\s+/g, ' ').trim()
               const age = ago(s.answered || s.asked)
               const tail = s.status === 'asking' ? spin + ' ' + age : s.status === 'failed' ? '✗ ' + age : (s.seen ? '' : 'new · ') + age
               const head = cut(q, Math.max(8, cols - 7 - tail.length))
@@ -635,6 +655,13 @@ export const register: Register = on => {
                         {s.answer && <Text>   </Text>}
                         <Button key={'sx:' + s.id} plain dimColor onPress={() => removeSide(s.id)}>✕ remove</Button>
                       </Box>
+                      {s.answer && (
+                        <Box flexDirection="row">
+                          <Button key={'sr:' + s.id} plain dimColor onPress={() => $.prompt.fill({ text: refLine('sidecar', s.id, cut(q, 40)) + '\n', mode: 'insert' })}>→ chat</Button>
+                          <Text>   </Text>
+                          <Button key={'sf:' + s.id} plain dimColor onPress={() => $.prompt.fill({ text: '/sidecar ' + refToken('sidecar', s.id) + ' ', mode: 'replace' })}>↪ follow up</Button>
+                        </Box>
+                      )}
                     </Box>
                   )}
                 </Box>

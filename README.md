@@ -99,6 +99,7 @@ A sidecar is a side question whose answer is kept beside the chat. It replaces a
   - one new command, /sidecar
   - one new inbox key, _sidecar
   ↻ ask again   ⧉ copy   ✕ remove
+  → chat   ↪ follow up
 [▸] which branch are we on? · 14m
 [▸] is the export fixed yet? · 1h
 ```
@@ -110,6 +111,9 @@ A sidecar is a side question whose answer is kept beside the chat. It replaces a
 - Sidecars stack, newest first. Asking a new one folds the others. A folded sidecar is one line: the question and its age. Click a line to open or close it; any number can be open.
 - `[ + sidecar ]` asks from the pane, without using the prompt box.
 - An open sidecar has `↻ ask again`, `⧉ copy` (the answer, to the clipboard) and `✕ remove`.
+- `→ chat` puts a ref to the sidecar in the prompt box: a line holding `‹sidecar:id›` and the question, never the answer. Type the rest of the prompt after it. When the prompt is sent, the mod hands Claude that sidecar's question and answer as context beside the prompt; the chat shows only the ref line.
+- `↪ follow up` starts `/sidecar ‹sidecar:id› ` in the prompt box. The new sidecar's fork is given the earlier question and answer, which it could not see otherwise.
+- A ref to a sidecar that has been removed tells Claude it is gone.
 - Sidecars are kept across sessions, the newest `keep_sidecars` (20) of them.
 - A fork cannot run commands or read files. It answers from the conversation so far. For an answer that needs tools, ask in chat for it "in a sidecar": Claude does the work and files the answer through `"_sidecar"` in `inbox.json`.
 - A session has nothing to fork until its first turn has finished, and again after `/clear`. The sidecar says so; send a prompt, then press `↻ ask again`.

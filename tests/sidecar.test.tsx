@@ -39,11 +39,13 @@ type World = {
   wait: () => Promise<void>          // how long the fork takes
   toasts: string[]
   copied: string[]
+  filled: string[]                   // every text $.prompt.fill put in the prompt box
+  entered: { text: string, context?: readonly string[] }[] // every prompt that reached the session, with its context
 }
 
 // Stands in for the engine under the mod: commands, the pane, files, the store, toasts, the fork.
 function world(on: On, seed: Partial<World> = {}): World {
-  const w: World = { files: {}, store: {}, forks: [], reply: () => answered('ok'), wait: async () => {}, toasts: [], copied: [], ...seed }
+  const w: World = { files: {}, store: {}, forks: [], reply: () => answered('ok'), wait: async () => {}, toasts: [], copied: [], filled: [], entered: [], ...seed }
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', (_, e) => ({ value: { command: e.name } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
@@ -57,6 +59,8 @@ function world(on: On, seed: Partial<World> = {}): World {
   })
   on('store.get', (_, e) => ({ value: w.store[e.key] }))
   on('store.set', (_, e) => { w.store[e.key] = e.value; return { value: undefined } })
+  on('prompt.fill', (_, e) => { w.filled.push(e.text); return { isFilled: true, text: e.text, cursor: e.text.length } })
+  on('prompt.submit', (_, e) => { w.entered.push({ text: e.text, context: e.context }); return { text: e.text, context: e.context } })
   on('model.fork', async (_, e) => { w.forks.push(e.prompt); await w.wait(); return { value: w.reply() } })
   return w
 }
@@ -269,5 +273,65 @@ test('a "_sidecar" entry in inbox.json is filed once, beside the other inbox key
   w.files['inbox.json'] = JSON.stringify({ _sidecar: [{ question: 'what have we changed so far?', answer: 'a later answer' }] })
   await clock.advance(3000)
   expect((await ui.findAll({ type: 'Markdown' })).map(m => m.text)).toEqual(['a later answer'])
+  await ui.unmount()
+})
+
+test('→ chat puts a ref in the prompt box, and sending it hands the sidecar to the model as context', async ($, on) => {
+  const clock = mock.clock(on)
+  const w = world(on, { reply: () => answered('on the sidecar branch') })
+  await $.session.start(START)
+  await $.command.run({ command: 'sidecar', args: 'which branch are we on?', ...TYPED })
+  await clock.settle()
+
+  const ui = await $.ui.mount(PANE)
+  const [title] = await sideButtons(ui)
+  const id = title!.key!.slice(2)
+  await ui.press({ key: 'sr:' + id })
+  expect(w.filled).toEqual(['⟜ threads › ‹sidecar:' + id + '› "which branch are we on?"\n'])
+  // The box holds an id and a label, never the answer.
+  expect(w.filled[0]).not.toContain('on the sidecar branch')
+
+  await $.prompt.submit({ text: w.filled[0] + 'push that branch', wait: false, ...TYPED })
+  const sent = w.entered.at(-1)!
+  expect(sent.text).toBe(w.filled[0] + 'push that branch')
+  expect(sent.context).toHaveLength(1)
+  expect(sent.context![0]).toContain('Question: which branch are we on?')
+  expect(sent.context![0]).toContain('on the sidecar branch')
+
+  // A prompt with no ref gets no context; the same ref twice is attached once.
+  await $.prompt.submit({ text: 'carry on', wait: false, ...TYPED })
+  expect(w.entered.at(-1)!.context).toBeUndefined()
+  await $.prompt.submit({ text: '‹sidecar:' + id + '› and again ‹sidecar:' + id + '›', wait: false, ...TYPED })
+  expect(w.entered.at(-1)!.context).toHaveLength(1)
+
+  // A ref to a sidecar that was removed says so instead of leaving the model to guess.
+  await ui.press({ key: 'sx:' + id })
+  await $.prompt.submit({ text: '‹sidecar:' + id + '› what did it say?', wait: false, ...TYPED })
+  expect(w.entered.at(-1)!.context![0]).toContain('no longer in the threads pane')
+  await ui.unmount()
+})
+
+test('↪ follow up asks a new sidecar that carries the earlier question and answer', async ($, on) => {
+  const clock = mock.clock(on)
+  const w = world(on, { reply: () => answered('on the sidecar branch') })
+  await $.session.start(START)
+  await $.command.run({ command: 'sidecar', args: 'which branch are we on?', ...TYPED })
+  await clock.settle()
+
+  const ui = await $.ui.mount(PANE)
+  const [first] = await sideButtons(ui)
+  const id = first!.key!.slice(2)
+  await ui.press({ key: 'sf:' + id })
+  expect(w.filled).toEqual(['/sidecar ‹sidecar:' + id + '› '])
+
+  w.reply = () => answered('no, three commits are local only')
+  await $.command.run({ command: 'sidecar', args: '‹sidecar:' + id + '› is it pushed?', ...TYPED })
+  await clock.settle()
+  expect(w.forks).toHaveLength(2)
+  expect(w.forks[1]).toContain('Question: which branch are we on?')
+  expect(w.forks[1]).toContain('on the sidecar branch')
+  // The new sidecar's title shows a mark in place of the raw id.
+  const titles = (await sideButtons(ui)).map(b => b.text)
+  expect(titles[0]).toBe('[▾] ↪ is it pushed?')
   await ui.unmount()
 })
